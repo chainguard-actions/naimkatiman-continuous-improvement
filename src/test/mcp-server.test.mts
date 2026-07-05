@@ -1,0 +1,690 @@
+import assert from "node:assert/strict";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, before, describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
+
+import {
+  PACKAGE_NAME,
+  VERSION,
+  getPluginHooksConfig,
+  getClaudePluginManifest,
+  getClaudePluginMarketplaceManifest,
+  getClaudeRepoMarketplaceManifest,
+  getPluginManifest,
+  getToolNames,
+} from "../lib/plugin-metadata.mjs";
+
+interface JsonRpcResponse {
+  error?: {
+    code?: number;
+    message?: string;
+  };
+  result?: any;
+}
+
+interface PendingResolver {
+  reject: (error: Error) => void;
+  resolve: (response: JsonRpcResponse) => void;
+  timer: NodeJS.Timeout;
+}
+
+class McpTestClient {
+  private buffer = Buffer.alloc(0);
+  private proc: ChildProcessWithoutNullStreams;
+  private resolvers: PendingResolver[] = [];
+
+  constructor(proc: ChildProcessWithoutNullStreams) {
+    this.proc = proc;
+
+    proc.stdout.on("data", (chunk: Buffer) => {
+      this.buffer = Buffer.concat([this.buffer, chunk]);
+      this.drain();
+    });
+  }
+
+  private drain(): void {
+    // MCP stdio transport spec: NDJSON. Each newline-terminated chunk is one
+    // JSON-RPC message; partial lines stay in the buffer until a newline arrives.
+    while (this.resolvers.length > 0) {
+      const newlineIndex = this.buffer.indexOf(0x0a); // '\n'
+      if (newlineIndex === -1) {
+        break;
+      }
+
+      const lineBytes = this.buffer.slice(0, newlineIndex);
+      this.buffer = this.buffer.slice(newlineIndex + 1);
+      const line = lineBytes.toString("utf8").replace(/\r$/, "");
+      if (line.length === 0) {
+        continue;
+      }
+
+      const next = this.resolvers.shift();
+      if (!next) {
+        break;
+      }
+
+      clearTimeout(next.timer);
+      try {
+        next.resolve(JSON.parse(line) as JsonRpcResponse);
+      } catch (error) {
+        next.resolve({
+          error: {
+            message: `JSON parse failed: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        });
+      }
+    }
+  }
+
+  send(message: Record<string, unknown>): Promise<JsonRpcResponse> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const index = this.resolvers.findIndex((resolver) => resolver.timer === timer);
+        if (index !== -1) {
+          this.resolvers.splice(index, 1);
+        }
+        reject(new Error(`Timeout waiting for response to ${String(message.method || message.id)}`));
+      }, 8000);
+
+      this.resolvers.push({ resolve, reject, timer });
+      this.proc.stdin.write(`${JSON.stringify(message)}\n`);
+      this.drain();
+    });
+  }
+
+  destroy(): void {
+    for (const resolver of this.resolvers) {
+      clearTimeout(resolver.timer);
+    }
+    this.resolvers = [];
+    this.proc.kill();
+  }
+}
+
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
+const MCP_SERVER = join(__dirname, "..", "bin", "mcp-server.mjs");
+
+describe("MCP server — stdio wire format", () => {
+  // The MCP stdio transport spec requires newline-delimited JSON-RPC
+  // (NDJSON) over stdout/stdin. NOT LSP-style Content-Length framing.
+  // Claude Code, the @modelcontextprotocol/sdk reference clients, and every
+  // other host parse stdout one line at a time and JSON.parse each line.
+  // A server that emits "Content-Length: ...\r\n\r\n{...}" silently hangs
+  // in the host's "Connecting…" state because no line ever resolves to JSON.
+  it("emits NDJSON responses on stdout (not LSP Content-Length framing)", async () => {
+    const tempHome = mkdtempSync(join(tmpdir(), "ci-mcp-wire-"));
+    mkdirSync(join(tempHome, ".claude", "instincts", "global"), { recursive: true });
+
+    const proc = spawn("node", [MCP_SERVER, "--mode", "beginner"], {
+      env: { ...process.env, HOME: tempHome },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    const stdoutChunks: Buffer[] = [];
+    proc.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+
+    proc.stdin.write(
+      `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} })}\n`,
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    const stdoutText = Buffer.concat(stdoutChunks).toString("utf8");
+    proc.kill();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    try {
+      rmSync(tempHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch {
+      // Windows stdio handle linger
+    }
+
+    assert.ok(
+      !stdoutText.includes("Content-Length:"),
+      `MCP stdio transport must NOT use LSP-style Content-Length framing. ` +
+        `Saw "${stdoutText.slice(0, 80)}". This breaks every host parser, including Claude Code.`,
+    );
+
+    const firstLine = stdoutText.split("\n")[0];
+    assert.ok(firstLine.length > 0, "Expected at least one line of output");
+    const parsed = JSON.parse(firstLine);
+    assert.equal(parsed.jsonrpc, "2.0");
+    assert.equal(parsed.id, 1);
+    assert.ok(parsed.result, "Initialize should return a result");
+    assert.ok(
+      stdoutText.startsWith(firstLine + "\n"),
+      "Each NDJSON message must terminate with a newline",
+    );
+  });
+});
+
+describe("MCP server — beginner mode", () => {
+  let client: McpTestClient;
+  let tempHome = "";
+
+  before(async () => {
+    tempHome = mkdtempSync(join(tmpdir(), "ci-mcp-test-"));
+    mkdirSync(join(tempHome, ".claude", "instincts", "global"), { recursive: true });
+
+    const proc = spawn("node", [MCP_SERVER, "--mode", "beginner"], {
+      env: { ...process.env, HOME: tempHome },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    client = new McpTestClient(proc);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  });
+
+  after(async () => {
+    client.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    try {
+      rmSync(tempHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch {
+      // Windows can briefly keep stdio handles open after the child exits.
+    }
+  });
+
+  it("responds to initialize", async () => {
+    const response = await client.send({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+    assert.equal(response.result.serverInfo.name, PACKAGE_NAME);
+    assert.equal(response.result.serverInfo.version, VERSION);
+  });
+
+  it("lists beginner tools only (4 tools)", async () => {
+    const response = await client.send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+    const names = response.result.tools.map((tool: { name: string }) => tool.name);
+    assert.deepEqual(names, getToolNames("beginner"));
+    assert.ok(!names.includes("ci_reinforce"), "Should NOT include expert tools");
+  });
+
+  it("ci_gateguard_clear is available in beginner mode and clears the gate canonically", async () => {
+    const list = await client.send({ jsonrpc: "2.0", id: 40, method: "tools/list", params: {} });
+    const names = list.result.tools.map((tool: { name: string }) => tool.name);
+    assert.ok(names.includes("ci_gateguard_clear"), "ci_gateguard_clear must be in beginner tools/list");
+
+    const response = await client.send({
+      jsonrpc: "2.0",
+      id: 41,
+      method: "tools/call",
+      params: { name: "ci_gateguard_clear", arguments: { file_paths: ["D:\\proj\\x.ts"] } },
+    });
+    assert.ok(!response.result.isError, "ci_gateguard_clear should succeed");
+    assert.match(response.result.content[0].text, /d:\/proj\/x\.ts/, "reports the canonical cleared key");
+  });
+
+  it("ci_gateguard_clear requires at least one path", async () => {
+    const response = await client.send({
+      jsonrpc: "2.0",
+      id: 42,
+      method: "tools/call",
+      params: { name: "ci_gateguard_clear", arguments: {} },
+    });
+    assert.ok(response.result.isError, "empty clear request must error");
+    assert.match(response.result.content[0].text, /file_paths/);
+  });
+
+  it("ci_gateguard_clear honors an in-root state_path and writes to that exact dir (session-scoped routing)", async () => {
+    // Inside the instincts root (HOME=tempHome for the server), mirroring the
+    // session-scoped path the hook prints. saveState mkdir's it recursively.
+    const statePath = join(tempHome, ".claude", "instincts", "scoped-test", "sessions", "sess-statepath", "gateguard-session.json");
+    const response = await client.send({
+      jsonrpc: "2.0",
+      id: 43,
+      method: "tools/call",
+      params: {
+        name: "ci_gateguard_clear",
+        arguments: { file_paths: ["D:\\proj\\z.ts"], state_path: statePath },
+      },
+    });
+    assert.ok(!response.result.isError, "clear with an in-root state_path should succeed");
+    assert.match(response.result.content[0].text, /gateguard-session\.json/);
+    // The marker must land at the supplied state_path, not the default session
+    // dir — this is what keeps the MCP clear route session-correct once the hook
+    // is session-scoped.
+    assert.ok(existsSync(statePath), "state file written at the supplied state_path");
+    const state = JSON.parse(readFileSync(statePath, "utf8")) as {
+      cleared_files?: Record<string, unknown>;
+    };
+    assert.ok(state.cleared_files && "d:/proj/z.ts" in state.cleared_files, "canonical key recorded at state_path");
+  });
+
+  it("ci_gateguard_clear rejects a state_path that resolves outside the instincts root (no arbitrary write)", async () => {
+    // A traversal/arbitrary path outside ~/.claude/instincts must be refused so
+    // the clear can't be turned into an arbitrary-write primitive.
+    const evil = join(tmpdir(), "ci-gg-evil", "gateguard-session.json");
+    const response = await client.send({
+      jsonrpc: "2.0",
+      id: 44,
+      method: "tools/call",
+      params: {
+        name: "ci_gateguard_clear",
+        arguments: { file_paths: ["D:\\proj\\z.ts"], state_path: evil },
+      },
+    });
+    assert.ok(response.result.isError, "a state_path outside ~/.claude/instincts must be rejected");
+    assert.match(response.result.content[0].text, /instincts/);
+    assert.ok(!existsSync(evil), "must not write the state file outside the instincts root");
+  });
+
+  it("ci_status returns project info", async () => {
+    const response = await client.send({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: { name: "ci_status", arguments: {} },
+    });
+    const text = response.result.content[0].text;
+    assert.match(text, /Level:/, "Should include level");
+    assert.match(text, /Observations:/, "Should include observation count");
+    assert.match(text, /beginner/, "Should show beginner mode");
+  });
+
+  it("ci_instincts returns empty message when no instincts", async () => {
+    const response = await client.send({
+      jsonrpc: "2.0",
+      id: 4,
+      method: "tools/call",
+      params: { name: "ci_instincts", arguments: {} },
+    });
+    assert.match(response.result.content[0].text, /No instincts found/i);
+  });
+
+  it("ci_reflect returns reflection template", async () => {
+    const response = await client.send({
+      jsonrpc: "2.0",
+      id: 5,
+      method: "tools/call",
+      params: { name: "ci_reflect", arguments: { summary: "Fixed a login bug" } },
+    });
+    const text = response.result.content[0].text;
+    assert.match(text, /Fixed a login bug/);
+    assert.match(text, /What worked/);
+    assert.match(text, /What failed/);
+  });
+
+  it("rejects expert tools in beginner mode", async () => {
+    const response = await client.send({
+      jsonrpc: "2.0",
+      id: 6,
+      method: "tools/call",
+      params: { name: "ci_reinforce", arguments: { instinct_id: "test", accepted: true } },
+    });
+    assert.ok(response.result.isError, "Should return error for expert tool in beginner mode");
+  });
+
+  it("lists resources", async () => {
+    const response = await client.send({ jsonrpc: "2.0", id: 7, method: "resources/list", params: {} });
+    assert.ok(response.result.resources.length >= 1, "Should list at least 1 resource");
+    const uris = response.result.resources.map((resource: { uri: string }) => resource.uri);
+    assert.ok(uris.some((uri: string) => uri.includes("instincts://")));
+  });
+});
+
+describe("MCP server — new feature tool handlers (expert)", () => {
+  let client: McpTestClient;
+  let tempHome = "";
+  let tempWorkspace = "";
+
+  before(async () => {
+    tempHome = mkdtempSync(join(tmpdir(), "ci-mcp-newtools-"));
+    mkdirSync(join(tempHome, ".claude", "instincts", "global"), { recursive: true });
+    tempWorkspace = join(tempHome, "workspace");
+    mkdirSync(tempWorkspace, { recursive: true });
+
+    const proc = spawn("node", [MCP_SERVER, "--mode", "expert"], {
+      env: { ...process.env, HOME: tempHome },
+      cwd: tempWorkspace,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    client = new McpTestClient(proc);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  });
+
+  after(async () => {
+    client.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    try {
+      rmSync(tempHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch {
+      // Windows can briefly keep stdio handles open after the child exits.
+    }
+  });
+
+  // audit #12 — ci_recall must fail fast on an unparseable since instead of
+  // silently dropping the filter and returning the full unfiltered history.
+  it("ci_recall rejects an unparseable since (audit #12)", async () => {
+    const r = await client.send({
+      jsonrpc: "2.0",
+      id: 60,
+      method: "tools/call",
+      params: { name: "ci_recall", arguments: { query: "build push", since: "last week" } },
+    });
+    assert.ok(r.result.isError, "an unparseable since must return an error envelope");
+    assert.match(r.result.content[0].text, /since/i);
+  });
+
+  it("ci_recall still requires a query", async () => {
+    const r = await client.send({
+      jsonrpc: "2.0",
+      id: 61,
+      method: "tools/call",
+      params: { name: "ci_recall", arguments: {} },
+    });
+    assert.ok(r.result.isError);
+    assert.match(r.result.content[0].text, /query is required/);
+  });
+
+  // audit #7 — ci_distill_promote must reject a path-traversal id before it is
+  // joined into a filesystem path (an arbitrary read + rmSync delete primitive).
+  it("ci_distill_promote rejects a path-traversal id (audit #7)", async () => {
+    const r = await client.send({
+      jsonrpc: "2.0",
+      id: 62,
+      method: "tools/call",
+      params: { name: "ci_distill_promote", arguments: { id: "../../../../etc/passwd" } },
+    });
+    assert.ok(r.result.isError, "a traversal id must be rejected, not joined into a path");
+    assert.doesNotMatch(
+      r.result.content[0].text,
+      /No draft at/,
+      "must reject the id before the existsSync path probe",
+    );
+  });
+
+  it("ci_distill_propose requires an id", async () => {
+    const r = await client.send({
+      jsonrpc: "2.0",
+      id: 63,
+      method: "tools/call",
+      params: { name: "ci_distill_propose", arguments: {} },
+    });
+    assert.ok(r.result.isError);
+    assert.match(r.result.content[0].text, /id is required/);
+  });
+
+  it("ci_distill_candidates returns the empty-state message on a fresh workspace", async () => {
+    const r = await client.send({
+      jsonrpc: "2.0",
+      id: 64,
+      method: "tools/call",
+      params: { name: "ci_distill_candidates", arguments: {} },
+    });
+    assert.ok(!r.result.isError);
+    assert.match(r.result.content[0].text, /No distillation candidates/);
+  });
+
+  it("ci_goal_check reports no goal source on a fresh workspace", async () => {
+    const r = await client.send({
+      jsonrpc: "2.0",
+      id: 65,
+      method: "tools/call",
+      params: { name: "ci_goal_check", arguments: {} },
+    });
+    assert.ok(!r.result.isError);
+    assert.match(r.result.content[0].text, /No goal source found/);
+  });
+});
+
+describe("MCP server — expert mode", () => {
+  let client: McpTestClient;
+  let tempHome = "";
+  let tempWorkspace = "";
+
+  before(async () => {
+    tempHome = mkdtempSync(join(tmpdir(), "ci-mcp-expert-"));
+    mkdirSync(join(tempHome, ".claude", "instincts", "global"), { recursive: true });
+    tempWorkspace = join(tempHome, "workspace");
+    mkdirSync(tempWorkspace, { recursive: true });
+
+    const proc = spawn("node", [MCP_SERVER, "--mode", "expert"], {
+      env: { ...process.env, HOME: tempHome },
+      cwd: tempWorkspace,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    client = new McpTestClient(proc);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  });
+
+  after(async () => {
+    client.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    try {
+      rmSync(tempHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch {
+      // Windows can briefly keep stdio handles open after the child exits.
+    }
+  });
+
+  it("lists all expert tools (19) in expert mode", async () => {
+    await client.send({ jsonrpc: "2.0", id: 10, method: "initialize", params: {} });
+    const response = await client.send({ jsonrpc: "2.0", id: 11, method: "tools/list", params: {} });
+    const names = response.result.tools.map((tool: { name: string }) => tool.name);
+    assert.deepEqual(
+      names,
+      getToolNames("expert"),
+      `Expected synced expert tool list, got: ${names.join(", ")}`,
+    );
+  });
+
+  it("ci_export returns JSON array", async () => {
+    const response = await client.send({
+      jsonrpc: "2.0",
+      id: 12,
+      method: "tools/call",
+      params: { name: "ci_export", arguments: { scope: "all" } },
+    });
+    const parsed = JSON.parse(response.result.content[0].text) as unknown[];
+    assert.ok(Array.isArray(parsed), "Export should return JSON array");
+  });
+
+  it("ci_create_instinct creates a new instinct", async () => {
+    const response = await client.send({
+      jsonrpc: "2.0",
+      id: 13,
+      method: "tools/call",
+      params: {
+        name: "ci_create_instinct",
+        arguments: {
+          id: "new-test-instinct",
+          trigger: "when writing code",
+          body: "Write tests first",
+          confidence: 0.7,
+        },
+      },
+    });
+    const text = response.result.content[0].text;
+    assert.match(text, /Created instinct/);
+    assert.match(text, /new-test-instinct/);
+  });
+
+  it("ci_import imports and reports count", async () => {
+    const importData = JSON.stringify([
+      { id: "imported-unique-1", trigger: "when deploying", body: "Check CI first", confidence: 0.5 },
+      { id: "imported-unique-2", trigger: "when reviewing", body: "Check coverage", confidence: 0.5 },
+    ]);
+
+    const response = await client.send({
+      jsonrpc: "2.0",
+      id: 14,
+      method: "tools/call",
+      params: { name: "ci_import", arguments: { instincts_json: importData } },
+    });
+    assert.match(response.result.content[0].text, /Imported \d+/);
+  });
+
+  it("ci_plan_init creates planning files in the workspace root", async () => {
+    const response = await client.send({
+      jsonrpc: "2.0",
+      id: 15,
+      method: "tools/call",
+      params: {
+        name: "ci_plan_init",
+        arguments: { goal: "Ship the planning workflow" },
+      },
+    });
+    assert.match(response.result.content[0].text, /Planning-With-Files Initialized/);
+    assert.ok(existsSync(join(tempWorkspace, "task_plan.md")));
+    assert.ok(existsSync(join(tempWorkspace, "findings.md")));
+    assert.ok(existsSync(join(tempWorkspace, "progress.md")));
+
+    const taskPlan = readFileSync(join(tempWorkspace, "task_plan.md"), "utf8");
+    assert.match(taskPlan, /Ship the planning workflow/);
+    assert.match(taskPlan, /- \[ \] Research/);
+  });
+
+  it("ci_plan_init preserves existing files when force is false", async () => {
+    const taskPlanPath = join(tempWorkspace, "task_plan.md");
+    writeFileSync(taskPlanPath, "# Task Plan\n\n## Status\nCustom status\n");
+
+    await client.send({
+      jsonrpc: "2.0",
+      id: 16,
+      method: "tools/call",
+      params: {
+        name: "ci_plan_init",
+        arguments: { goal: "Should not overwrite existing plan" },
+      },
+    });
+
+    assert.equal(readFileSync(taskPlanPath, "utf8"), "# Task Plan\n\n## Status\nCustom status\n");
+  });
+
+  it("ci_plan_status summarizes checked phases and can include file contents", async () => {
+    writeFileSync(
+      join(tempWorkspace, "task_plan.md"),
+      [
+        "# Task Plan",
+        "",
+        "## Goal",
+        "Ship the planning workflow",
+        "",
+        "## Status",
+        "In progress",
+        "",
+        "## Phases",
+        "- [x] Research",
+        "- [ ] Plan",
+        "- [ ] Execute",
+      ].join("\n") + "\n"
+    );
+    writeFileSync(join(tempWorkspace, "findings.md"), "# Findings\n\n- Found the MCP integration points.\n");
+    writeFileSync(join(tempWorkspace, "progress.md"), "# Progress\n\n- Ran initialization.\n");
+
+    const response = await client.send({
+      jsonrpc: "2.0",
+      id: 17,
+      method: "tools/call",
+      params: {
+        name: "ci_plan_status",
+        arguments: { include_contents: true },
+      },
+    });
+    const text = response.result.content[0].text;
+    assert.match(text, /\*\*Status:\*\* In progress/);
+    assert.match(text, /Checked phases:\*\* Research/);
+    assert.match(text, /Remaining phases:\*\* Plan, Execute/);
+    assert.match(text, /findings\.md: present \(has notes\)/);
+    assert.match(text, /## task_plan\.md/);
+    assert.match(text, /# Task Plan/);
+  });
+
+  it("ci_goal_check rejects an out-of-range limit through tools/call (item 3 boundary)", async () => {
+    // The in-handler guard is the actual safety gate (it shields both
+    // getRecentObservations and scoreObservations). It fires before goal-source
+    // resolution, so a bad limit errors even with a task_plan.md present.
+    for (const [callId, bad] of [[80, 0], [81, -5], [82, 2.5]] as const) {
+      const response = await client.send({
+        jsonrpc: "2.0",
+        id: callId,
+        method: "tools/call",
+        params: { name: "ci_goal_check", arguments: { limit: bad } },
+      });
+      assert.ok(response.result.isError, `limit=${bad} must be rejected with isError`);
+      assert.match(
+        response.result.content[0].text,
+        /limit must be a positive integer/,
+        `limit=${bad} must return the positive-integer guard message`,
+      );
+    }
+  });
+
+  it("returns error for unknown method", async () => {
+    const response = await client.send({ jsonrpc: "2.0", id: 18, method: "nonexistent/method", params: {} });
+    assert.ok(response.error, "Should return error for unknown method");
+    assert.equal(response.error?.code, -32601);
+  });
+});
+
+describe("Plugin configs", () => {
+  it("beginner.json matches the shared plugin manifest", () => {
+    const config = JSON.parse(
+      readFileSync(join(__dirname, "..", "plugins", "beginner.json"), "utf8"),
+    ) as ReturnType<typeof getPluginManifest>;
+    assert.deepEqual(config, getPluginManifest("beginner"));
+  });
+
+  it("expert.json matches the shared plugin manifest", () => {
+    const config = JSON.parse(
+      readFileSync(join(__dirname, "..", "plugins", "expert.json"), "utf8"),
+    ) as ReturnType<typeof getPluginManifest>;
+    assert.deepEqual(config, getPluginManifest("expert"));
+  });
+
+  it("claude plugin manifest matches the shared plugin metadata", () => {
+    const config = JSON.parse(
+      readFileSync(
+        join(__dirname, "..", "plugins", PACKAGE_NAME, ".claude-plugin", "plugin.json"),
+        "utf8",
+      ),
+    ) as ReturnType<typeof getClaudePluginManifest>;
+    assert.deepEqual(config, getClaudePluginManifest());
+  });
+
+  it("claude plugin marketplace manifest matches the shared plugin metadata", () => {
+    const config = JSON.parse(
+      readFileSync(
+        join(__dirname, "..", "plugins", PACKAGE_NAME, ".claude-plugin", "marketplace.json"),
+        "utf8",
+      ),
+    ) as ReturnType<typeof getClaudePluginMarketplaceManifest>;
+    assert.deepEqual(config, getClaudePluginMarketplaceManifest());
+  });
+
+  it("repo-level claude marketplace manifest matches the shared plugin metadata", () => {
+    const config = JSON.parse(
+      readFileSync(
+        join(__dirname, "..", ".claude-plugin", "marketplace.json"),
+        "utf8",
+      ),
+    ) as ReturnType<typeof getClaudeRepoMarketplaceManifest>;
+    // PM plugins were removed from the repo-level marketplace as part of the
+    // 7 Laws focus pass. Generator passes [] to getClaudeRepoMarketplaceManifest;
+    // this assertion mirrors that exact call shape.
+    assert.deepEqual(
+      config,
+      getClaudeRepoMarketplaceManifest([]),
+    );
+  });
+
+  it("plugin hooks config matches the shared plugin metadata", () => {
+    const config = JSON.parse(
+      readFileSync(
+        join(__dirname, "..", "plugins", PACKAGE_NAME, "hooks", "hooks.json"),
+        "utf8",
+      ),
+    ) as ReturnType<typeof getPluginHooksConfig>;
+    assert.deepEqual(config, getPluginHooksConfig());
+  });
+
+  it("bundles the core skill into the plugin package", () => {
+    const source = readFileSync(join(__dirname, "..", "SKILL.md"), "utf8");
+    const bundled = readFileSync(
+      join(__dirname, "..", "plugins", PACKAGE_NAME, "skills", PACKAGE_NAME, "SKILL.md"),
+      "utf8",
+    );
+    assert.equal(bundled, source);
+  });
+});

@@ -1,0 +1,36 @@
+name: Test strict mode - action fails when violations found with strict=true
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create bad transcript fixture
+        run: |
+          mkdir -p /tmp/transcripts
+          # A bad agent: writes without any research or verification
+          cat > /tmp/transcripts/strict-bad.jsonl <<'EOF'
+          {"tool":"Write","tool_input":{"file_path":"file1.js"},"session_id":"s1"}
+          {"tool":"Edit","tool_input":{"file_path":"file2.js"},"session_id":"s1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/transcripts/strict-bad.jsonl
+          strict: 'true'
+        continue-on-error: true
+
+      - name: Assert action failed due to violations in strict mode
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: expected action to fail in strict mode with violations, got outcome '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS: action correctly failed in strict mode"
