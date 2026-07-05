@@ -1,0 +1,41 @@
+name: Test strict mode passes with clean transcript
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create clean transcript fixture
+        run: |
+          mkdir -p /tmp/fixtures
+          # Well-disciplined: research before writes, verification after
+          cat > /tmp/fixtures/strict-clean.jsonl <<'EOF'
+          {"tool":"Grep","tool_input":{"pattern":"main","path":"src/"},"session_id":"s1"}
+          {"tool":"Read","tool_input":{"file_path":"src/index.js"},"session_id":"s1"}
+          {"tool":"Write","tool_input":{"file_path":"src/index.js"},"session_id":"s1"}
+          {"tool":"Bash","tool_input":{"command":"jest --runInBand"},"session_id":"s1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/fixtures/strict-clean.jsonl
+          strict: 'true'
+
+      - name: Assert action succeeded in strict mode with no violations
+        run: |
+          echo "PASS: action completed without failure in strict mode"
+
+      - name: Assert violations is 0
+        env:
+          ACTUAL: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $ACTUAL"
+          if [ "$ACTUAL" != "0" ]; then
+            echo "FAIL: expected 0 violations, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"

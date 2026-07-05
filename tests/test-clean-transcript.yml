@@ -1,0 +1,60 @@
+name: Test clean transcript (no violations)
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create clean transcript fixture
+        run: |
+          mkdir -p /tmp/fixtures
+          # A well-disciplined transcript: research first, then write, then verify
+          cat > /tmp/fixtures/clean.jsonl <<'EOF'
+          {"tool":"Grep","tool_input":{"pattern":"foo","path":"src/"},"session_id":"s1"}
+          {"tool":"Read","tool_input":{"file_path":"src/main.js"},"session_id":"s1"}
+          {"tool":"Glob","tool_input":{"pattern":"**/*.js"},"session_id":"s1"}
+          {"tool":"Write","tool_input":{"file_path":"src/main.js"},"session_id":"s1"}
+          {"tool":"Bash","tool_input":{"command":"npm run test"},"session_id":"s1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/fixtures/clean.jsonl
+          strict: 'false'
+
+      - name: Assert violations is 0
+        env:
+          ACTUAL: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $ACTUAL"
+          if [ "$ACTUAL" != "0" ]; then
+            echo "FAIL: expected 0 violations, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert score is 100
+        env:
+          ACTUAL: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $ACTUAL"
+          if [ "$ACTUAL" != "100" ]; then
+            echo "FAIL: expected score=100, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert report is non-empty
+        env:
+          ACTUAL: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report length: ${#ACTUAL}"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected non-empty report"
+            exit 1
+          fi
+          echo "PASS"

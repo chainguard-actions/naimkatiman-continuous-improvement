@@ -1,0 +1,59 @@
+name: Test observations-path input
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create observations fixture
+        run: |
+          mkdir -p /tmp/fixtures
+          # A well-disciplined observations file: research, write, verify
+          cat > /tmp/fixtures/observations.jsonl <<'EOF'
+          {"tool":"Read","tool_input":{"file_path":"README.md"},"session_id":"obs1"}
+          {"tool":"Grep","tool_input":{"pattern":"TODO","path":"."},"session_id":"obs1"}
+          {"tool":"Write","tool_input":{"file_path":"README.md"},"session_id":"obs1"}
+          {"tool":"Bash","tool_input":{"command":"build && test"},"session_id":"obs1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          observations-path: /tmp/fixtures/observations.jsonl
+          strict: 'false'
+
+      - name: Assert violations output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected violations output to be set"
+            exit 1
+          fi
+          echo "PASS: violations=$ACTUAL"
+
+      - name: Assert score output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected score output to be set"
+            exit 1
+          fi
+          echo "PASS: score=$ACTUAL"
+
+      - name: Assert score is 100 for clean observations
+        env:
+          ACTUAL: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $ACTUAL"
+          if [ "$ACTUAL" != "100" ]; then
+            echo "FAIL: expected score=100 for clean observations, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
