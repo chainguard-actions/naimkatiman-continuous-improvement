@@ -1,0 +1,27 @@
+name: Test strict mode fails on violations
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: lint
+        uses: .
+        with:
+          transcript-path: tests/fixtures/violations-transcript.jsonl
+          strict: 'true'
+        continue-on-error: true
+
+      - name: Assert action failed due to strict mode
+        env:
+          OUTCOME: ${{ steps.lint.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: expected action to fail in strict mode with violations, got outcome '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS: action correctly failed in strict mode"
