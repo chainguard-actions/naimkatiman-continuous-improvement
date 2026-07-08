@@ -1,0 +1,47 @@
+name: Test basic usage - clean transcript
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: tests/fixtures/clean-transcript.jsonl
+
+      - name: Assert violations output is 0
+        env:
+          ACTUAL: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "actual violations: $ACTUAL"
+          if [ "$ACTUAL" != "0" ]; then
+            echo "FAIL: expected 0 violations, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert score output is 100
+        env:
+          ACTUAL: ${{ steps.action.outputs.score }}
+        run: |
+          echo "actual score: $ACTUAL"
+          if [ "$ACTUAL" != "100" ]; then
+            echo "FAIL: expected score 100, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert report output is non-empty
+        env:
+          ACTUAL: ${{ steps.action.outputs.report }}
+        run: |
+          echo "actual report length: ${#ACTUAL}"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected non-empty report"
+            exit 1
+          fi
+          echo "PASS"

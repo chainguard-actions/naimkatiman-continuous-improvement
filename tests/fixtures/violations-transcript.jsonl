@@ -1,0 +1,2 @@
+{"tool":"Write","tool_input":{"file_path":"output.txt"},"session_id":"s1"}
+{"tool":"Edit","tool_input":{"file_path":"main.py"},"session_id":"s1"}

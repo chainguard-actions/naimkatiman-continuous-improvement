@@ -1,0 +1,52 @@
+name: Test observations-path input
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          observations-path: tests/fixtures/observations.jsonl
+
+      - name: Assert violations output is present
+        env:
+          ACTUAL: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "actual violations: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected violations output to be set"
+            exit 1
+          fi
+          echo "PASS: violations output is '$ACTUAL'"
+
+      - name: Assert score output is present and in range
+        env:
+          ACTUAL: ${{ steps.action.outputs.score }}
+        run: |
+          echo "actual score: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected score output to be set"
+            exit 1
+          fi
+          if [ "$ACTUAL" -lt 0 ] || [ "$ACTUAL" -gt 100 ] 2>/dev/null; then
+            echo "FAIL: score '$ACTUAL' is out of range 0-100"
+            exit 1
+          fi
+          echo "PASS: score is $ACTUAL"
+
+      - name: Assert report contains discipline report header
+        env:
+          ACTUAL: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report excerpt: ${ACTUAL:0:100}"
+          if echo "$ACTUAL" | grep -q "Agent Discipline Report"; then
+            echo "PASS: report contains expected header"
+          else
+            echo "FAIL: expected report to contain 'Agent Discipline Report'"
+            exit 1
+          fi
