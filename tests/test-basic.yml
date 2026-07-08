@@ -1,0 +1,48 @@
+name: Test basic usage - clean transcript
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: lint
+        uses: .
+        with:
+          transcript-path: tests/fixtures/good-transcript.jsonl
+          strict: 'false'
+
+      - name: Assert violations output is 0
+        env:
+          VIOLATIONS: ${{ steps.lint.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected 0 violations, got '$VIOLATIONS'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert score is 100
+        env:
+          SCORE: ${{ steps.lint.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ "$SCORE" != "100" ]; then
+            echo "FAIL: expected score 100, got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert report is non-empty
+        env:
+          REPORT: ${{ steps.lint.outputs.report }}
+        run: |
+          echo "report length: ${#REPORT}"
+          if [ -z "$REPORT" ]; then
+            echo "FAIL: expected non-empty report"
+            exit 1
+          fi
+          echo "PASS"

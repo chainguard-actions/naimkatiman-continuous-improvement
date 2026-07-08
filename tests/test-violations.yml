@@ -1,0 +1,49 @@
+name: Test violations detection
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: lint
+        uses: .
+        with:
+          transcript-path: tests/fixtures/bad-transcript.jsonl
+          strict: 'false'
+
+      - name: Assert violations output is greater than 0
+        env:
+          VIOLATIONS: ${{ steps.lint.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if [ -z "$VIOLATIONS" ] || [ "$VIOLATIONS" -le 0 ]; then
+            echo "FAIL: expected violations > 0, got '$VIOLATIONS'"
+            exit 1
+          fi
+          echo "PASS: $VIOLATIONS violation(s) detected"
+
+      - name: Assert score is less than 100
+        env:
+          SCORE: ${{ steps.lint.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ] || [ "$SCORE" -ge 100 ]; then
+            echo "FAIL: expected score < 100, got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: score is $SCORE"
+
+      - name: Assert report mentions violations
+        env:
+          REPORT: ${{ steps.lint.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if echo "$REPORT" | grep -qi "violation"; then
+            echo "PASS: report mentions violations"
+          else
+            echo "FAIL: expected report to mention violations"
+            exit 1
+          fi
