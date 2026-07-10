@@ -1,0 +1,58 @@
+{
+  "name": "continuous-improvement",
+  "version": "3.21.0",
+  "mode": "beginner",
+  "description": "Beginner mode: see what your agent learned, list its instincts, and request a session reflection. Bundles three grounding skills (gateguard, tdd-workflow, verification-loop) so research, memory, tests, and verification happen by default — every edit starts from facts, not guesses.",
+  "tools": [
+    {
+      "name": "ci_status",
+      "what": "See what the system has learned about your project"
+    },
+    {
+      "name": "ci_instincts",
+      "what": "List all learned behaviors with confidence levels"
+    },
+    {
+      "name": "ci_reflect",
+      "what": "Reflect on what you did this session"
+    },
+    {
+      "name": "ci_gateguard_clear",
+      "what": "Clear the GateGuard gate for files after presenting facts"
+    }
+  ],
+  "setup": {
+    "claude_desktop": {
+      "mcpServers": {
+        "continuous-improvement": {
+          "command": "node",
+          "args": [
+            "<install-path>/bin/mcp-server.mjs",
+            "--mode",
+            "beginner"
+          ]
+        }
+      }
+    },
+    "claude_code": {
+      "mcpServers": {
+        "continuous-improvement": {
+          "command": "node",
+          "args": [
+            "<install-path>/bin/mcp-server.mjs",
+            "--mode",
+            "beginner"
+          ]
+        }
+      }
+    }
+  },
+  "hooks": {
+    "included": [
+      "PreToolUse",
+      "PostToolUse",
+      "UserPromptSubmit"
+    ],
+    "description": "Silently captures every tool call as observations and routes prompts to the matching skill via the route table. Lightweight and non-blocking."
+  }
+}

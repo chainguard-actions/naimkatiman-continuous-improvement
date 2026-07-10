@@ -1,0 +1,67 @@
+name: Test multiple law violations (Law 3 and Law 6)
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create transcript with many consecutive edits and many files
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures"
+          # First do some research so Law 1 is satisfied
+          # Then do many consecutive edits (triggers Law 3 at >5 consecutive)
+          # Edit 9+ different files (triggers Law 6 at >8 files)
+          # No verification (triggers Law 4)
+          python3 -c "
+          import json
+          lines = []
+          # Research first
+          lines.append(json.dumps({'tool': 'Read', 'tool_input': {'file_path': 'README.md'}, 'session_id': 's1'}))
+          lines.append(json.dumps({'tool': 'Grep', 'tool_input': {'pattern': 'foo'}, 'session_id': 's1'}))
+          # Many consecutive edits to many different files (triggers Law 3 and Law 6)
+          for i in range(10):
+              lines.append(json.dumps({'tool': 'Write', 'tool_input': {'file_path': f'file{i}.js'}, 'session_id': 's1'}))
+          print('\n'.join(lines))
+          " > "$GITHUB_WORKSPACE/tests/fixtures/multi-violations.jsonl"
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: tests/fixtures/multi-violations.jsonl
+          strict: 'false'
+
+      - name: Assert multiple violations detected
+        env:
+          ACTUAL: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "actual violations: $ACTUAL"
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" -lt 2 ] 2>/dev/null; then
+            echo "FAIL: expected at least 2 violations but got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: violations=$ACTUAL"
+
+      - name: Assert score is significantly reduced
+        env:
+          ACTUAL: ${{ steps.action.outputs.score }}
+        run: |
+          echo "actual score: $ACTUAL"
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" -ge 100 ] 2>/dev/null; then
+            echo "FAIL: expected score < 100 but got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: score=$ACTUAL"
+
+      - name: Assert report mentions law violations
+        env:
+          ACTUAL: ${{ steps.action.outputs.report }}
+        run: |
+          echo "actual report: $ACTUAL"
+          if ! echo "$ACTUAL" | grep -qi "law"; then
+            echo "FAIL: expected report to mention law violations"
+            exit 1
+          fi
+          echo "PASS"
