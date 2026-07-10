@@ -14,6 +14,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | v3.19.0 | [`v3.19.0`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.19.0) | [`7dacc0c`](https://github.com/naimkatiman/continuous-improvement/commit/7dacc0c7df649aea90ffb8069669239593e8ae8d) |
 | v3.20.0 | [`v3.20.0`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.20.0) | [`41f3ef0`](https://github.com/naimkatiman/continuous-improvement/commit/41f3ef0645609eaeff9202886e7b5c13d8058b4d) |
 | v3.20.4 | [`v3.20.4`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.20.4) | [`438f12a`](https://github.com/naimkatiman/continuous-improvement/commit/438f12a0dacc90f5bcebe9f3eb069d3255e5fa7b) |
+| v3.21.0 | [`v3.21.0`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.21.0) | [`a49681a`](https://github.com/naimkatiman/continuous-improvement/commit/a49681ae424b84f53c64a7deed6eac1341bab866) |
 
 ## Privacy
 
