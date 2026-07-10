@@ -1,0 +1,41 @@
+name: Test strict mode passes with no violations
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create clean transcript fixture
+        run: |
+          cat > /tmp/strict-clean-transcript.jsonl <<'EOF'
+          {"tool":"Read","tool_input":{"file_path":"README.md"},"session_id":"s1"}
+          {"tool":"Grep","tool_input":{"pattern":"test"},"session_id":"s1"}
+          {"tool":"Write","tool_input":{"file_path":"output.txt"},"session_id":"s1"}
+          {"tool":"Bash","tool_input":{"command":"npm run test"},"session_id":"s1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/strict-clean-transcript.jsonl
+          strict: 'true'
+
+      - name: Assert action succeeded in strict mode with no violations
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          echo "violations: $VIOLATIONS"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: expected action to succeed in strict mode with no violations, but outcome was '$OUTCOME'"
+            exit 1
+          fi
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected 0 violations but got '$VIOLATIONS'"
+            exit 1
+          fi
+          echo "PASS: action succeeded in strict mode with 0 violations"

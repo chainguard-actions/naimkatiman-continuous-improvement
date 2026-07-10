@@ -1,0 +1,56 @@
+name: Test violations detected in transcript
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create violating transcript fixture
+        run: |
+          cat > /tmp/violating-transcript.jsonl <<'EOF'
+          {"tool":"Write","tool_input":{"file_path":"file1.js"},"session_id":"s1"}
+          {"tool":"Edit","tool_input":{"file_path":"file2.js"},"session_id":"s1"}
+          {"tool":"Write","tool_input":{"file_path":"file3.js"},"session_id":"s1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/violating-transcript.jsonl
+          strict: 'false'
+
+      - name: Assert violations is greater than 0
+        env:
+          ACTUAL: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "actual violations: $ACTUAL"
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" -le 0 ] 2>/dev/null; then
+            echo "FAIL: expected violations > 0 but got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: violations detected: $ACTUAL"
+
+      - name: Assert score is less than 100
+        env:
+          ACTUAL: ${{ steps.action.outputs.score }}
+        run: |
+          echo "actual score: $ACTUAL"
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" -ge 100 ] 2>/dev/null; then
+            echo "FAIL: expected score < 100 but got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: score is $ACTUAL (less than 100)"
+
+      - name: Assert report mentions violations
+        env:
+          ACTUAL: ${{ steps.action.outputs.report }}
+        run: |
+          echo "actual report: $ACTUAL"
+          if ! echo "$ACTUAL" | grep -qi "violation"; then
+            echo "FAIL: expected report to mention violations"
+            exit 1
+          fi
+          echo "PASS: report mentions violations"
