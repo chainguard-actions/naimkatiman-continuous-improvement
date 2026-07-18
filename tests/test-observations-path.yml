@@ -1,48 +1,61 @@
 name: Test observations-path input
 on:
   workflow_dispatch:
-
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - id: lint
+      - name: Create a well-disciplined observations file
+        run: |
+          mkdir -p /tmp/observations
+          cat > /tmp/observations/observations.jsonl <<'EOF'
+          {"tool":"Grep","tool_input":{"pattern":"function","path":"src/"},"session_id":"obs-001"}
+          {"tool":"Read","tool_input":{"file_path":"src/index.js"},"session_id":"obs-001"}
+          {"tool":"Write","tool_input":{"file_path":"src/index.js","content":"// updated"},"session_id":"obs-001"}
+          {"tool":"Bash","tool_input":{"command":"jest --coverage"},"session_id":"obs-001"}
+          EOF
+
+      - id: action
         uses: .
         with:
-          observations-path: tests/fixtures/good-transcript.jsonl
+          observations-path: /tmp/observations/observations.jsonl
           strict: 'false'
 
-      - name: Assert violations output is set
+      - name: Assert violations output is zero
         env:
-          VIOLATIONS: ${{ steps.lint.outputs.violations }}
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
         run: |
           echo "violations: $VIOLATIONS"
-          if [ -z "$VIOLATIONS" ]; then
-            echo "FAIL: expected violations output to be set"
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected 0 violations using observations-path, got '$VIOLATIONS'"
             exit 1
           fi
-          echo "PASS: violations=$VIOLATIONS"
+          echo "PASS: violations=0 with observations-path"
 
-      - name: Assert score output is set
+      - name: Assert score output is present and numeric
         env:
-          SCORE: ${{ steps.lint.outputs.score }}
+          SCORE: ${{ steps.action.outputs.score }}
         run: |
           echo "score: $SCORE"
           if [ -z "$SCORE" ]; then
-            echo "FAIL: expected score output to be set"
+            echo "FAIL: score output is empty"
             exit 1
           fi
-          echo "PASS: score=$SCORE"
+          if ! echo "$SCORE" | grep -qE '^[0-9]+$'; then
+            echo "FAIL: score is not a number: '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: score=$SCORE is a valid number"
 
-      - name: Assert report output is set
+      - name: Assert report contains score line
         env:
-          REPORT: ${{ steps.lint.outputs.report }}
+          REPORT: ${{ steps.action.outputs.report }}
         run: |
-          echo "report length: ${#REPORT}"
-          if [ -z "$REPORT" ]; then
-            echo "FAIL: expected report output to be set"
+          echo "report: $REPORT"
+          if ! echo "$REPORT" | grep -q "Score:"; then
+            echo "FAIL: report does not contain 'Score:'"
             exit 1
           fi
-          echo "PASS"
+          echo "PASS: report contains Score line"

@@ -1,0 +1,62 @@
+name: Test basic usage - no violations
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a well-disciplined transcript (research before writes, with verification)
+        run: |
+          mkdir -p /tmp/transcripts
+          cat > /tmp/transcripts/good-agent.jsonl <<'EOF'
+          {"tool":"Grep","tool_input":{"pattern":"TODO","path":"src/"},"session_id":"sess-001"}
+          {"tool":"Read","tool_input":{"file_path":"src/main.js"},"session_id":"sess-001"}
+          {"tool":"Glob","tool_input":{"pattern":"**/*.js"},"session_id":"sess-001"}
+          {"tool":"Write","tool_input":{"file_path":"src/main.js","content":"// fixed"},"session_id":"sess-001"}
+          {"tool":"Bash","tool_input":{"command":"npm run test"},"session_id":"sess-001"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/transcripts/good-agent.jsonl
+          strict: 'false'
+
+      - name: Assert violations output is zero
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected 0 violations, got '$VIOLATIONS'"
+            exit 1
+          fi
+          echo "PASS: violations=0"
+
+      - name: Assert score is 100
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ "$SCORE" != "100" ]; then
+            echo "FAIL: expected score=100, got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: score=100"
+
+      - name: Assert report is non-empty and contains expected header
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if [ -z "$REPORT" ]; then
+            echo "FAIL: report output is empty"
+            exit 1
+          fi
+          if ! echo "$REPORT" | grep -q "Agent Discipline Report"; then
+            echo "FAIL: report does not contain 'Agent Discipline Report'"
+            exit 1
+          fi
+          echo "PASS: report is non-empty and contains expected header"

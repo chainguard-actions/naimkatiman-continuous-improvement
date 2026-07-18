@@ -8,41 +8,45 @@
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
-**Harden Agent Version:** `1`
+**Harden Agent Version:** `2`
 
-Action **naimkatiman--continuous-improvement/v3.20.0** was hardened automatically. 3 finding(s) were identified and resolved across 1 iteration(s).
+Action **naimkatiman--continuous-improvement/v3.20.0** was hardened automatically. 2 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### unpinned-uses (severity: high)
 
-All workflow files reference GitHub Actions using mutable version tags (@v4) instead of pinned 40-character SHA commit hashes. This exposes the workflow to supply-chain attacks if the tag is moved to a malicious commit. Affected references: actions/checkout@v4 and actions/setup-node@v4 in all four workflow files.
+All four workflow files reference GitHub Actions using mutable version tags (@v4) instead of pinned full-length SHA digests. This exposes the workflows to supply-chain attacks if the upstream action tag is moved to a malicious commit.
+
+Failing references:
+- ci.yml: `actions/checkout@v4` (line 17), `actions/setup-node@v4` (line 20), `actions/checkout@v4` (line 52), `actions/setup-node@v4` (line 53)
+- release.yml: `actions/checkout@v4` (line 16), `actions/setup-node@v4` (line 27)
+- landing-drift.yml: `actions/checkout@v4` (line 28)
+- skills-drift.yml: `actions/checkout@v4` (line 10)
+
+Each should be pinned to a full 40-character commit SHA, e.g. `actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4`.
 
 Locations:
 
-- `.github/workflows/ci.yml:12`
-- `.github/workflows/ci.yml:15`
-- `.github/workflows/ci.yml:47`
-- `.github/workflows/ci.yml:48`
-- `.github/workflows/landing-drift.yml:22`
-- `.github/workflows/release.yml:14`
-- `.github/workflows/release.yml:21`
-- `.github/workflows/skills-drift.yml:11`
+- `.github/workflows/ci.yml:17`
+- `.github/workflows/ci.yml:20`
+- `.github/workflows/ci.yml:52`
+- `.github/workflows/ci.yml:53`
+- `.github/workflows/release.yml:16`
+- `.github/workflows/release.yml:27`
+- `.github/workflows/landing-drift.yml:28`
+- `.github/workflows/skills-drift.yml:10`
 
 ### missing-permissions (severity: medium)
 
-ci.yml has no top-level 'permissions:' key and no job-level 'permissions:' on any of its jobs (test, lint-transcript). Without explicit permissions, the workflow inherits the default repository token permissions, which may be broader than necessary.
+ci.yml and skills-drift.yml have no top-level `permissions:` block and no job-level `permissions:` block on any of their jobs. Without explicit permissions, workflows inherit the repository's default token permissions (which may be read/write), violating the principle of least privilege.
+
+- ci.yml: two jobs (`test` and `lint-transcript`) both lack permissions.
+- skills-drift.yml: one job (`skills-drift`) lacks permissions.
 
 Locations:
 
 - `.github/workflows/ci.yml:1`
-
-### missing-permissions (severity: medium)
-
-skills-drift.yml has no top-level 'permissions:' key and no job-level 'permissions:' on its skills-drift job. Without explicit permissions, the workflow inherits the default repository token permissions, which may be broader than necessary.
-
-Locations:
-
 - `.github/workflows/skills-drift.yml:1`
 
 ## Iteration Notes
@@ -53,5 +57,5 @@ Locations:
 
 **Notes:**
 
-Fixed all 8 unpinned action references across 4 workflow files: actions/checkout@v4 → pinned to SHA 34e114876b0b11c390a56381ad16ebd13914f8d5 and actions/setup-node@v4 → pinned to SHA 49933ea5288caeca8642d1e84afbd3f7d6820020, with original tags preserved as comments. Added top-level `permissions: contents: read` to ci.yml and skills-drift.yml. landing-drift.yml already had permissions set; release.yml already had appropriate job-level permissions (contents: write, id-token: write) for OIDC publishing.
+Pinned all 8 unpinned action references to full SHA digests: actions/checkout@v4 → @34e114876b0b11c390a56381ad16ebd13914f8d5 and actions/setup-node@v4 → @49933ea5288caeca8642d1e84afbd3f7d6820020, with # v4 comments for readability. Added job-level `permissions: contents: read` to the `test` and `lint-transcript` jobs in ci.yml, and to the `skills-drift` job in skills-drift.yml. The release.yml already had explicit permissions (contents: write, id-token: write) and landing-drift.yml already had a top-level permissions block, so those were left unchanged.
 
