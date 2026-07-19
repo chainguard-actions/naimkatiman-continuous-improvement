@@ -1,4 +1,4 @@
-name: Test violations detected in transcript
+name: Test violations detected (writes without research)
 on:
   workflow_dispatch:
 
@@ -8,52 +8,51 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Create bad transcript fixture
+      - name: Create violating transcript fixture
         run: |
           mkdir -p /tmp/fixtures
-          # A poorly-disciplined transcript: writes without any research or verification
-          cat > /tmp/fixtures/bad.jsonl <<'EOF'
-          {"tool":"Write","tool_input":{"file_path":"src/a.js"},"session_id":"s1"}
-          {"tool":"Write","tool_input":{"file_path":"src/b.js"},"session_id":"s1"}
-          {"tool":"Edit","tool_input":{"file_path":"src/c.js"},"session_id":"s1"}
+          # Bad agent: writes without any research, no verification
+          cat > /tmp/fixtures/violations.jsonl <<'EOF'
+          {"tool":"Write","tool_input":{"file_path":"a.js"},"session_id":"s1"}
+          {"tool":"Write","tool_input":{"file_path":"b.js"},"session_id":"s1"}
+          {"tool":"Edit","tool_input":{"file_path":"c.js"},"session_id":"s1"}
           EOF
 
       - id: action
         uses: .
         with:
-          transcript-path: /tmp/fixtures/bad.jsonl
+          transcript-path: /tmp/fixtures/violations.jsonl
           strict: 'false'
 
       - name: Assert violations is greater than 0
         env:
-          ACTUAL: ${{ steps.action.outputs.violations }}
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
         run: |
-          echo "violations: $ACTUAL"
-          if [ -z "$ACTUAL" ] || [ "$ACTUAL" -le 0 ] 2>/dev/null; then
-            echo "FAIL: expected violations > 0, got '$ACTUAL'"
+          echo "violations: $VIOLATIONS"
+          if [ -z "$VIOLATIONS" ] || [ "$VIOLATIONS" -le 0 ] 2>/dev/null; then
+            echo "FAIL: expected violations > 0, got '$VIOLATIONS'"
             exit 1
           fi
-          echo "PASS: $ACTUAL violation(s) detected"
+          echo "PASS: $VIOLATIONS violation(s) detected"
 
       - name: Assert score is less than 100
         env:
-          ACTUAL: ${{ steps.action.outputs.score }}
+          SCORE: ${{ steps.action.outputs.score }}
         run: |
-          echo "score: $ACTUAL"
-          if [ -z "$ACTUAL" ] || [ "$ACTUAL" -ge 100 ] 2>/dev/null; then
-            echo "FAIL: expected score < 100, got '$ACTUAL'"
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ] || [ "$SCORE" -ge 100 ] 2>/dev/null; then
+            echo "FAIL: expected score < 100, got '$SCORE'"
             exit 1
           fi
-          echo "PASS: score=$ACTUAL"
+          echo "PASS: score is $SCORE"
 
       - name: Assert report mentions violations
         env:
-          ACTUAL: ${{ steps.action.outputs.report }}
+          REPORT: ${{ steps.action.outputs.report }}
         run: |
-          echo "report: $ACTUAL"
-          if echo "$ACTUAL" | grep -qi "violation"; then
-            echo "PASS: report mentions violations"
-          else
-            echo "FAIL: expected report to mention violations"
+          echo "report: $REPORT"
+          if ! echo "$REPORT" | grep -qi "violation"; then
+            echo "FAIL: report does not mention violations"
             exit 1
           fi
+          echo "PASS"
