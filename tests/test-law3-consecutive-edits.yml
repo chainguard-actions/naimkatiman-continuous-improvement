@@ -1,0 +1,57 @@
+name: Test Law 3 violation - consecutive edits
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create transcript with many consecutive edits (triggers Law 3)
+        run: |
+          mkdir -p /tmp/fixtures
+          cat > /tmp/fixtures/consecutive-edits.jsonl <<'EOF'
+          {"tool":"Read","tool_input":{"file_path":"src/main.js"},"session_id":"s1"}
+          {"tool":"Edit","tool_input":{"file_path":"src/a.js"},"session_id":"s1"}
+          {"tool":"Edit","tool_input":{"file_path":"src/b.js"},"session_id":"s1"}
+          {"tool":"Edit","tool_input":{"file_path":"src/c.js"},"session_id":"s1"}
+          {"tool":"Edit","tool_input":{"file_path":"src/d.js"},"session_id":"s1"}
+          {"tool":"Edit","tool_input":{"file_path":"src/e.js"},"session_id":"s1"}
+          {"tool":"Edit","tool_input":{"file_path":"src/f.js"},"session_id":"s1"}
+          {"tool":"Bash","tool_input":{"command":"npm run test"},"session_id":"s1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/fixtures/consecutive-edits.jsonl
+          strict: 'false'
+
+      - name: Assert violations detected (Law 3 - consecutive edits)
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          echo "report: $REPORT"
+          if [ -z "$VIOLATIONS" ] || [ "$VIOLATIONS" -le 0 ] 2>/dev/null; then
+            echo "FAIL: expected Law 3 violation for consecutive edits, got violations=$VIOLATIONS"
+            exit 1
+          fi
+          echo "PASS: $VIOLATIONS violation(s) detected as expected"
+
+      - name: Assert score is set and numeric
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ]; then
+            echo "FAIL: score output is empty"
+            exit 1
+          fi
+          if ! echo "$SCORE" | grep -qE '^[0-9]+$'; then
+            echo "FAIL: score is not numeric: $SCORE"
+            exit 1
+          fi
+          echo "PASS: score=$SCORE"

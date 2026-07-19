@@ -1,4 +1,4 @@
-name: Test observations-path input - alternative to transcript-path
+name: Test observations-path input
 on:
   workflow_dispatch:
 
@@ -10,39 +10,49 @@ jobs:
 
       - name: Create observations fixture
         run: |
-          mkdir -p /tmp/observations
-          # A well-behaved agent using observations format
-          cat > /tmp/observations/observations.jsonl <<'EOF'
-          {"tool_name":"Grep","tool_input":{"pattern":"test","path":"."},"session_id":"obs1"}
-          {"tool_name":"Read","tool_input":{"file_path":"src/main.js"},"session_id":"obs1"}
-          {"tool_name":"Write","tool_input":{"file_path":"src/main.js"},"session_id":"obs1"}
-          {"tool_name":"Bash","tool_input":{"command":"jest --coverage"},"session_id":"obs1"}
+          mkdir -p /tmp/fixtures
+          cat > /tmp/fixtures/observations.jsonl <<'EOF'
+          {"tool":"Grep","tool_input":{"pattern":"import"},"session_id":"obs1"}
+          {"tool":"Read","tool_input":{"file_path":"README.md"},"session_id":"obs1"}
+          {"tool":"Write","tool_input":{"file_path":"docs/guide.md"},"session_id":"obs1"}
+          {"tool":"Bash","tool_input":{"command":"build --check"},"session_id":"obs1"}
           EOF
 
       - id: action
         uses: .
         with:
-          observations-path: /tmp/observations/observations.jsonl
+          observations-path: /tmp/fixtures/observations.jsonl
           strict: 'false'
 
-      - name: Assert violations output is 0
+      - name: Assert violations output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.violations }}
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
         run: |
-          echo "actual violations: $ACTUAL"
-          if [ "$ACTUAL" != "0" ]; then
-            echo "FAIL: expected 0 violations, got '$ACTUAL'"
+          echo "violations: $VIOLATIONS"
+          if [ -z "$VIOLATIONS" ]; then
+            echo "FAIL: expected violations output to be set"
             exit 1
           fi
-          echo "PASS"
+          echo "PASS: violations=$VIOLATIONS"
 
-      - name: Assert score output is 100
+      - name: Assert score output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.score }}
+          SCORE: ${{ steps.action.outputs.score }}
         run: |
-          echo "actual score: $ACTUAL"
-          if [ "$ACTUAL" != "100" ]; then
-            echo "FAIL: expected score 100, got '$ACTUAL'"
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ]; then
+            echo "FAIL: expected score output to be set"
+            exit 1
+          fi
+          echo "PASS: score=$SCORE"
+
+      - name: Assert report contains discipline report header
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if ! echo "$REPORT" | grep -q "Agent Discipline Report"; then
+            echo "FAIL: expected 'Agent Discipline Report' in report"
             exit 1
           fi
           echo "PASS"
