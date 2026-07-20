@@ -1,0 +1,45 @@
+name: Test violations transcript without strict mode
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          transcript-path: pristine/naimkatiman--continuous-improvement/v3.15.0/tests/fixtures/violations-transcript.jsonl
+          strict: 'false'
+
+      - name: Assert action ran and produced an outcome
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ -z "$OUTCOME" ]; then
+            echo "FAIL: action did not produce an outcome"
+            exit 1
+          fi
+          echo "PASS: action produced outcome=$OUTCOME"
+
+      - name: Check outputs when action succeeded in non-strict mode
+        if: steps.action.outcome == 'success'
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          echo "score: $SCORE"
+          if [ -z "$VIOLATIONS" ] || [ "$VIOLATIONS" -le 0 ] 2>/dev/null; then
+            echo "FAIL: expected violations > 0 for a bad transcript, got '$VIOLATIONS'"
+            exit 1
+          fi
+          if [ -z "$SCORE" ] || [ "$SCORE" -ge 100 ] 2>/dev/null; then
+            echo "FAIL: expected score < 100 for a bad transcript, got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: violations=$VIOLATIONS (greater than 0), score=$SCORE (less than 100)"

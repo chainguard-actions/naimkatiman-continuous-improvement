@@ -1,0 +1,68 @@
+# continuous-improvement
+
+> The persistent-memory and runtime-discipline layer for Claude Code. It remembers the corrections you already gave, grounds every edit in real facts before it lands, and — through the Mulahazah engine — turns each fix into a reusable instinct, so a lesson learned once is applied automatically next time with no re-teaching. Built on the 7 Laws of AI Agent Discipline (research, plan, verify, reflect, learn) and shipped as 25 bundled skills, instinct-aware hooks, an MCP toolset for recall and reflection, and a GitHub Action transcript linter that feeds real work history back into sharper instincts.
+
+## What This Is
+
+The persistent-memory and discipline layer for AI coding agents. It carries the corrections Claude has already received from one session into the next, grounds each edit in real facts before it lands, and learns from every session so its competence compounds over time — research, plan, execute one thing at a time, verify, reflect, iterate, learn — building behavioral instincts via the Mulahazah learning system, so the same correction never has to be given twice and each run starts smarter than the last. Orchestration tools run a task; this is the layer that makes the lessons survive the run.
+
+## Install
+
+```bash
+npx continuous-improvement install
+```
+
+## The 7 Laws
+
+1. Research Before Executing — search before writing
+2. Plan Is Sacred — state WILL/WILL NOT/VERIFY before acting
+3. One Thing at a Time — complete and verify one task before the next
+4. Verify Before Reporting — "done" requires actual proof
+5. Reflect After Sessions — capture what worked, what failed, and the top-3 next moves
+6. Iterate One Change — one change, verify, then next
+7. Learn From Every Session — patterns become instincts
+
+## Reflection Block (Law 5 -> Law 6 Handoff)
+
+Each reflection ends with a ranked top-3 of concrete core-development next moves:
+
+```
+## Reflection
+- What worked:
+- What failed:
+- What I'd do differently:
+- Rule to add:
+- Iteration — Next best recommendations (ranked, top 3):
+  1. <primary>
+  2. <alternative — different angle>
+  3. <alternative — smaller/larger scope>
+```
+
+The Iteration field is build/fix/refactor/investigate moves only — not git steps, not verification re-runs, not deploy actions. Format per item: `<verb> <object at path:line> (<why>)`. Full spec in SKILL.md.
+
+## Key Concepts
+
+- **Mulahazah** — auto-leveling learning system that captures tool usage patterns
+- **Instincts** — YAML-based behavioral rules with confidence scoring (0.0-0.9)
+- **Auto-leveling** — CAPTURE → ANALYZE → SUGGEST → AUTO-APPLY (no config needed)
+- **Project-scoped** — instincts are per-project, promoted to global when seen in 2+ projects
+- **Planning-With-Files** — opt-in project-root memory files: `task_plan.md`, `findings.md`, `progress.md`
+
+## Optional Planning Workflow
+
+When a task needs persistent file-based planning, use the `planning-with-files` workflow to create:
+- `task_plan.md` — phases, status, decisions, errors
+- `findings.md` — research notes and sources
+- `progress.md` — session log and verification notes
+
+This workflow is explicit and opt-in. Files are created in the git root when available, otherwise the current working directory.
+
+## Works With
+
+- Claude Code (full support: skill + hooks + MCP server + slash commands + auto-leveling instincts)
+
+## Links
+
+- GitHub: https://github.com/naimkatiman/continuous-improvement
+- npm: https://www.npmjs.com/package/continuous-improvement
+- Skill file: https://raw.githubusercontent.com/naimkatiman/continuous-improvement/main/SKILL.md

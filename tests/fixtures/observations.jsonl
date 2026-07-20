@@ -1,0 +1,4 @@
+{"tool":"Read","tool_input":{"file_path":"README.md"},"session_id":"obs-001"}
+{"tool":"Grep","tool_input":{"pattern":"TODO","path":"."},"session_id":"obs-001"}
+{"tool":"Write","tool_input":{"file_path":"NOTES.md","content":"# Notes"},"session_id":"obs-001"}
+{"tool":"Bash","tool_input":{"command":"npm run build"},"session_id":"obs-001"}

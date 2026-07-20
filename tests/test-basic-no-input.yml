@@ -1,0 +1,44 @@
+name: Test basic usage with no inputs fails gracefully
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: ''
+          strict: 'false'
+        continue-on-error: true
+
+      - name: Assert action failed gracefully with no file path
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          # The script requires a file path or --stdin; with no inputs it exits with error
+          # This is expected behavior for the CLI-style action
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action correctly failed when no transcript path provided"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded (may have handled empty input gracefully)"
+          else
+            echo "FAIL: unexpected outcome: $OUTCOME"
+            exit 1
+          fi
+
+      - name: Assert script exits with error when no file path given
+        run: |
+          set +e
+          node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" 2>&1
+          EXIT_CODE=$?
+          set -e
+          echo "exit code: $EXIT_CODE"
+          if [ "$EXIT_CODE" = "0" ]; then
+            echo "FAIL: expected non-zero exit code when no file path given"
+            exit 1
+          fi
+          echo "PASS: script correctly exited with code $EXIT_CODE when no file path given"

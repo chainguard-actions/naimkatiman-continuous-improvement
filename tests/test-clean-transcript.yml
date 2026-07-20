@@ -1,0 +1,57 @@
+name: Test clean transcript produces no violations
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: 'tests/fixtures/clean-transcript.jsonl'
+          strict: 'false'
+        continue-on-error: true
+
+      - name: Assert linter exits 0 for clean transcript
+        run: |
+          node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" \
+            "$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl"
+          echo "PASS: linter ran successfully on clean transcript"
+
+      - name: Assert no violations in output
+        run: |
+          OUTPUT=$(node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" \
+            "$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl")
+          echo "output: $OUTPUT"
+          if echo "$OUTPUT" | grep -q "### Violations"; then
+            echo "FAIL: clean transcript should not have violations section"
+            exit 1
+          fi
+          echo "PASS: no violations section in output"
+
+      - name: Assert score is 100 in JSON output
+        run: |
+          JSON=$(node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" \
+            --json "$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl")
+          echo "json: $JSON"
+          SCORE=$(echo "$JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['score'])")
+          echo "score: $SCORE"
+          if [ "$SCORE" != "100" ]; then
+            echo "FAIL: expected score 100 but got $SCORE"
+            exit 1
+          fi
+          echo "PASS: score is 100 for clean transcript"
+
+      - name: Assert violations count is 0 in JSON output
+        run: |
+          JSON=$(node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" \
+            --json "$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl")
+          VIOLATIONS=$(echo "$JSON" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['violations']))")
+          echo "violations: $VIOLATIONS"
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected 0 violations but got $VIOLATIONS"
+            exit 1
+          fi
+          echo "PASS: 0 violations for clean transcript"

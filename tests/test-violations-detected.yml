@@ -1,0 +1,79 @@
+name: Test violations are detected in bad transcript
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: 'tests/fixtures/violations-transcript.jsonl'
+          strict: 'false'
+        continue-on-error: true
+
+      - name: Assert violations are detected in bad transcript
+        run: |
+          JSON=$(node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" \
+            --json "$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl")
+          echo "json: $JSON"
+          VIOLATIONS=$(echo "$JSON" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['violations']))")
+          echo "violations: $VIOLATIONS"
+          if [ -z "$VIOLATIONS" ] || [ "$VIOLATIONS" = "0" ]; then
+            echo "FAIL: expected violations > 0 but got '$VIOLATIONS'"
+            exit 1
+          fi
+          echo "PASS: violations detected: $VIOLATIONS"
+
+      - name: Assert score is less than 100 for bad transcript
+        run: |
+          JSON=$(node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" \
+            --json "$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl")
+          SCORE=$(echo "$JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['score'])")
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ]; then
+            echo "FAIL: score output is empty"
+            exit 1
+          fi
+          if [ "$SCORE" = "100" ]; then
+            echo "FAIL: expected score < 100 for a bad transcript but got 100"
+            exit 1
+          fi
+          echo "PASS: score is $SCORE (less than 100)"
+
+      - name: Assert report contains violations section
+        run: |
+          OUTPUT=$(node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" \
+            "$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl")
+          echo "output: $OUTPUT"
+          if ! echo "$OUTPUT" | grep -q "Violations"; then
+            echo "FAIL: report should contain 'Violations' section"
+            exit 1
+          fi
+          echo "PASS: report contains violations section"
+
+      - name: Assert Law 1 violation is detected (write without research)
+        run: |
+          JSON=$(node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" \
+            --json "$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl")
+          LAW1=$(echo "$JSON" | python3 -c "import sys,json; r=json.load(sys.stdin); print(len([v for v in r['violations'] if v['law']==1]))")
+          echo "law1 violations: $LAW1"
+          if [ "$LAW1" = "0" ]; then
+            echo "FAIL: expected Law 1 violation (write without research) but found none"
+            exit 1
+          fi
+          echo "PASS: Law 1 violation detected"
+
+      - name: Assert Law 4 violation is detected (no verification)
+        run: |
+          JSON=$(node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" \
+            --json "$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl")
+          LAW4=$(echo "$JSON" | python3 -c "import sys,json; r=json.load(sys.stdin); print(len([v for v in r['violations'] if v['law']==4]))")
+          echo "law4 violations: $LAW4"
+          if [ "$LAW4" = "0" ]; then
+            echo "FAIL: expected Law 4 violation (no verification) but found none"
+            exit 1
+          fi
+          echo "PASS: Law 4 violation detected"

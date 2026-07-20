@@ -1,0 +1,35 @@
+name: Test strict mode exits 1 when violations detected
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: 'tests/fixtures/violations-transcript.jsonl'
+          strict: 'true'
+        continue-on-error: true
+
+      - name: Assert strict mode exits 1 with violations
+        run: |
+          set +e
+          node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" \
+            --strict "$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl"
+          EXIT_CODE=$?
+          set -e
+          echo "exit code: $EXIT_CODE"
+          if [ "$EXIT_CODE" = "0" ]; then
+            echo "FAIL: expected exit code 1 in strict mode with violations, got 0"
+            exit 1
+          fi
+          echo "PASS: strict mode correctly exited with code $EXIT_CODE"
+
+      - name: Assert strict mode exits 0 with clean transcript
+        run: |
+          node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" \
+            --strict "$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl"
+          echo "PASS: strict mode exited 0 with clean transcript"

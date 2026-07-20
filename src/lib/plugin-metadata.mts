@@ -1,0 +1,748 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+export const PACKAGE_NAME = "continuous-improvement";
+
+const PKG_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+export const VERSION: string = (JSON.parse(readFileSync(PKG_PATH, "utf8")) as { version: string }).version;
+
+export const PLUGIN_MODES = ["beginner", "expert"] as const;
+
+export type PluginMode = typeof PLUGIN_MODES[number];
+export type HookType =
+  | "PreToolUse"
+  | "PostToolUse"
+  | "UserPromptSubmit"
+  | "SessionStart"
+  | "SessionEnd"
+  | "Stop";
+
+export interface SchemaProperty {
+  default?: boolean | number | string | string[];
+  description?: string;
+  items?: {
+    type: string;
+  };
+  type: string;
+}
+
+export interface ToolDefinition {
+  description: string;
+  inputSchema: {
+    properties: Record<string, SchemaProperty>;
+    required: string[];
+    type: "object";
+  };
+  name: string;
+}
+
+export interface PluginManifestTool {
+  name: string;
+  what: string;
+}
+
+export interface PluginManifest {
+  description: string;
+  hooks: {
+    description: string;
+    included: HookType[];
+  };
+  mode: PluginMode;
+  name: string;
+  setup: {
+    claude_code: {
+      mcpServers: Record<string, { args: string[]; command: string }>;
+    };
+    claude_desktop: {
+      mcpServers: Record<string, { args: string[]; command: string }>;
+    };
+  };
+  tools: PluginManifestTool[];
+  version: string;
+}
+
+export interface PluginAuthor {
+  name: string;
+  url?: string;
+}
+
+export interface PluginHookCommand {
+  command: string;
+  timeout: number;
+  type: "command";
+}
+
+export interface PluginHooksConfig {
+  description: string;
+  hooks: Partial<Record<HookType, Array<{ matcher?: string; hooks: PluginHookCommand[] }>>>;
+}
+
+export interface ClaudePluginManifest {
+  author: {
+    name: string;
+    url?: string;
+  };
+  description: string;
+  homepage: string;
+  keywords: string[];
+  license: string;
+  name: string;
+  repository: string;
+  version: string;
+}
+
+export interface ClaudeMarketplacePluginEntry {
+  author: {
+    name: string;
+    email?: string;
+    url?: string;
+  };
+  category: string;
+  description: string;
+  homepage: string;
+  name: string;
+  source: string;
+  version: string;
+}
+
+export interface ClaudePluginMarketplaceManifest {
+  description: string;
+  name: string;
+  owner: {
+    name: string;
+  };
+  plugins: ClaudeMarketplacePluginEntry[];
+}
+
+interface ToolCatalogEntry extends ToolDefinition {
+  manifestWhat: string;
+}
+
+interface ModeMetadata {
+  description: string;
+  hookDescription: string;
+  hooks: HookType[];
+}
+
+const REPOSITORY_URL = "https://github.com/naimkatiman/continuous-improvement";
+const HOMEPAGE_URL = `${REPOSITORY_URL}#readme`;
+const AUTHOR: PluginAuthor = {
+  name: "naimkatiman",
+  url: "https://github.com/naimkatiman",
+};
+const KEYWORDS = [
+  "claude-code",
+  "claude-code-skill",
+  "ai-agent",
+  "agent-skill",
+  "ai-discipline",
+  "mulahazah",
+  "instinct",
+  "hooks",
+  "mcp",
+  "mcp-server",
+  "github-action",
+  "transcript-linter",
+];
+const CLAUDE_PLUGIN_CATEGORY = "productivity";
+const SHARED_PLUGIN_DESCRIPTION =
+  "The persistent-memory and runtime-discipline layer for Claude Code. It remembers the corrections you already gave, grounds every edit in real facts before it lands, and — through the Mulahazah engine — turns each fix into a reusable instinct, so a lesson learned once is applied automatically next time with no re-teaching. Built on the 7 Laws of AI Agent Discipline (research, plan, verify, reflect, learn) and shipped as 25 bundled skills, instinct-aware hooks, an MCP toolset for recall and reflection, and a GitHub Action transcript linter that feeds real work history back into sharper instincts.";
+
+// Four vendored upstream companions registered alongside the CI plugin.
+// Each entry points at a pinned-SHA snapshot under third-party/<name>/.
+// See third-party/MANIFEST.md for refresh recipes and per-snapshot
+// OUR_NOTES.md for integration scope and overlap matrices. The unified
+// /superpowers dispatcher (skills/superpowers.md) routes across all four.
+// Product-management coverage is supplied by phuryn/pm-skills as an
+// out-of-band marketplace install — see docs/THIRD_PARTY.md for the
+// `claude plugin marketplace add phuryn/pm-skills` recipe and the eight
+// installable plugins (pm-toolkit, pm-product-strategy, pm-product-discovery,
+// pm-market-research, pm-data-analytics, pm-marketing-growth,
+// pm-go-to-market, pm-execution).
+const THIRD_PARTY_COMPANIONS: ClaudeMarketplacePluginEntry[] = [
+  {
+    name: "superpowers",
+    description:
+      "Obra's core skills library: TDD, debugging, brainstorming, writing-plans, executing-plans, dispatching-parallel-agents, using-git-worktrees, finishing-a-development-branch, subagent-driven-development, requesting-code-review, receiving-code-review, systematic-debugging, verification-before-completion, writing-skills, using-superpowers. Vendored snapshot at third-party/superpowers/ pinned to upstream SHA f2cbfbe (v5.1.0). Companion to the /superpowers dispatcher in continuous-improvement plugin.",
+    version: "5.1.0",
+    source: "./third-party/superpowers",
+    author: {
+      name: "Jesse Vincent",
+      email: "jesse@fsck.com",
+    },
+    category: "workflow",
+    homepage: "https://github.com/obra/superpowers",
+  },
+  {
+    name: "agent-skills",
+    description:
+      "Addy Osmani's production-grade engineering skills for AI coding agents — 21 skills covering the full software development lifecycle: spec-driven-development, source-driven-development, context-engineering, idea-refine, incremental-implementation, test-driven-development, code-review-and-quality, code-simplification, security-and-hardening, debugging-and-error-recovery, performance-optimization, api-and-interface-design, frontend-ui-engineering, browser-testing-with-devtools, ci-cd-and-automation, deprecation-and-migration, documentation-and-adrs, git-workflow-and-versioning, planning-and-task-breakdown, shipping-and-launch, using-agent-skills. Vendored snapshot at third-party/addy-agent-skills/ pinned to upstream SHA 742dca5 (v1.0.0).",
+    version: "1.0.0",
+    source: "./third-party/addy-agent-skills",
+    author: {
+      name: "Addy Osmani",
+    },
+    category: "workflow",
+    homepage: "https://github.com/addyosmani/agent-skills",
+  },
+  {
+    name: "ruflo-swarm",
+    description:
+      "Agent teams, swarm coordination, Monitor streams, and worktree isolation. Wraps 4 swarm_* + 8 agent_* MCP tools (12 total) plus 6 topologies (hierarchical, mesh, hierarchical-mesh, ring, star, adaptive). Slash commands /swarm and /watch. Skills swarm-init and monitor-stream. Cherry-picked from ruvnet/ruflo monorepo (the other 31 plugins are explicitly out of scope). Vendored snapshot at third-party/ruflo-swarm/ pinned to upstream SHA addb5cd (v0.2.0). Activation note: assets reference unpinned npx @claude-flow/cli@latest — supply-chain risk inert until installed.",
+    version: "0.2.0",
+    source: "./third-party/ruflo-swarm",
+    author: {
+      name: "ruvnet",
+      url: "https://github.com/ruvnet",
+    },
+    category: "orchestration",
+    homepage: "https://github.com/ruvnet/ruflo",
+  },
+  {
+    name: "oh-my-claudecode",
+    description:
+      "Multi-agent orchestration system for Claude Code — 38 skills + 19 agents covering audit, plan, build, verify, ship, release, retrospective, and ops. Includes ralph (autonomous PRD loop), release, ultrawork, ultraqa, team, trace, visual-verdict, debug, deep-dive, deep-interview, autopilot, autoresearch. Vendored snapshot at third-party/oh-my-claudecode/ pinned to upstream SHA aacde3e (v4.13.6). Heavy overlap with continuous-improvement /ralph and /superpowers — pick per task.",
+    version: "4.13.6",
+    source: "./third-party/oh-my-claudecode",
+    author: {
+      name: "Yeachan-Heo",
+    },
+    category: "orchestration",
+    homepage: "https://github.com/Yeachan-Heo/oh-my-claudecode",
+  },
+];
+
+export function isPluginMode(value: string | undefined): value is PluginMode {
+  return value === "beginner" || value === "expert";
+}
+
+const BEGINNER_TOOL_ENTRIES: ToolCatalogEntry[] = [
+  {
+    name: "ci_status",
+    description:
+      "Show current level, instinct count, and observation count for this project. Good starting point to see what the system has learned.",
+    manifestWhat: "See what the system has learned about your project",
+    inputSchema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "ci_instincts",
+    description:
+      "List all learned instincts for this project with their confidence levels and behaviors.",
+    manifestWhat: "List all learned behaviors with confidence levels",
+    inputSchema: {
+      type: "object",
+      properties: {
+        min_confidence: {
+          type: "number",
+          description: "Minimum confidence to show (default: 0)",
+          default: 0,
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "ci_reflect",
+    description:
+      "Generate a structured reflection for the current session. Provide a summary of what you worked on.",
+    manifestWhat: "Reflect on what you did this session",
+    inputSchema: {
+      type: "object",
+      properties: {
+        summary: {
+          type: "string",
+          description: "Brief summary of what was done this session",
+        },
+      },
+      required: ["summary"],
+    },
+  },
+  {
+    name: "ci_gateguard_clear",
+    description:
+      "Clear the GateGuard gate for one or more files after presenting the required facts (importers, affected APIs, data schema, the user's instruction). Records canonical per-file clearance in the session state the hook reads, so the next Edit/Write to those paths is allowed. Clearance matches regardless of drive-letter case or path separator. Available in beginner mode because the gate fires for every install.",
+    manifestWhat: "Clear the GateGuard gate for files after presenting facts",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_paths: {
+          type: "array",
+          description: "File paths to clear — the paths named in the GateGuard block reason",
+          items: { type: "string" },
+        },
+        file_path: {
+          type: "string",
+          description: "A single file path to clear (alternative to file_paths)",
+        },
+        state_path: {
+          type: "string",
+          description:
+            "State-file path from the GateGuard block reason (the session-scoped gateguard-session.json). Pass it verbatim so the clearance lands in the session the hook is reading; it must resolve inside ~/.claude/instincts/. Omitting it falls back to the unscoped canonical dir — safe only in legacy (no session id) contexts; when the hook is session-scoped, omitting it writes to the wrong dir and the retry will still block.",
+        },
+      },
+      required: [],
+    },
+  },
+];
+
+const EXPERT_TOOL_ENTRIES: ToolCatalogEntry[] = [
+  {
+    name: "ci_reinforce",
+    description:
+      "Accept or reject an instinct suggestion. Adjusts confidence: +0.15 for accept, -0.1 for reject.",
+    manifestWhat: "Accept or reject instinct suggestions to tune confidence",
+    inputSchema: {
+      type: "object",
+      properties: {
+        instinct_id: { type: "string", description: "The instinct ID to reinforce" },
+        accepted: {
+          type: "boolean",
+          description: "true = accept (+0.15), false = reject (-0.1)",
+        },
+      },
+      required: ["instinct_id", "accepted"],
+    },
+  },
+  {
+    name: "ci_create_instinct",
+    description:
+      "Manually create a new instinct with a trigger, body, and starting confidence.",
+    manifestWhat: "Manually create instincts with custom triggers and confidence",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Unique instinct ID (kebab-case)" },
+        trigger: { type: "string", description: "When this instinct applies" },
+        body: { type: "string", description: "The behavior to follow" },
+        confidence: {
+          type: "number",
+          description: "Starting confidence 0.0-0.9 (default: 0.6)",
+          default: 0.6,
+        },
+        domain: {
+          type: "string",
+          description: "Domain: workflow|tooling|testing|patterns|code-style",
+          default: "workflow",
+        },
+        scope: {
+          type: "string",
+          description: "Scope: project|global",
+          default: "project",
+        },
+      },
+      required: ["id", "trigger", "body"],
+    },
+  },
+  {
+    name: "ci_observations",
+    description: "View recent tool call observations captured by hooks.",
+    manifestWhat: "View raw tool call observations captured by hooks",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          description: "Number of recent observations to return (default: 20)",
+          default: 20,
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "ci_export",
+    description: "Export all instincts as a JSON array for sharing or backup.",
+    manifestWhat: "Export instincts as JSON for sharing or backup",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scope: {
+          type: "string",
+          description: "Which instincts: project|global|all (default: all)",
+          default: "all",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "ci_import",
+    description: "Import instincts from a JSON array. Skips duplicates by ID.",
+    manifestWhat: "Import instincts from JSON (skip duplicates)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        instincts_json: {
+          type: "string",
+          description: "JSON array of instinct objects to import",
+        },
+        scope: {
+          type: "string",
+          description: "Import to: project|global (default: project)",
+          default: "project",
+        },
+      },
+      required: ["instincts_json"],
+    },
+  },
+  {
+    name: "ci_plan_init",
+    description:
+      "Create task_plan.md, findings.md, and progress.md in the project root for persistent file-based planning.",
+    manifestWhat: "Create project-root planning files for persistent task memory",
+    inputSchema: {
+      type: "object",
+      properties: {
+        goal: { type: "string", description: "Goal for the planning workflow" },
+        phases: {
+          type: "array",
+          description:
+            "Optional ordered phase names. Defaults to Research, Plan, Execute, Verify, Reflect.",
+          items: { type: "string" },
+        },
+        force: {
+          type: "boolean",
+          description: "Overwrite existing planning files",
+          default: false,
+        },
+      },
+      required: ["goal"],
+    },
+  },
+  {
+    name: "ci_plan_status",
+    description:
+      "Summarize the status of task_plan.md, findings.md, and progress.md in the project root.",
+    manifestWhat: "Summarize task_plan.md, findings.md, and progress.md status",
+    inputSchema: {
+      type: "object",
+      properties: {
+        include_contents: {
+          type: "boolean",
+          description: "Include raw file contents in the response",
+          default: false,
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "ci_dashboard",
+    description:
+      "Visual dashboard showing instinct health, observation stats, confidence distribution, and learning progress.",
+    manifestWhat:
+      "Visual dashboard showing instinct health, confidence distribution, and learning progress",
+    inputSchema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "ci_load_pack",
+    description:
+      "Load a starter instinct pack (react, python, go) into the current project.",
+    manifestWhat: "Load starter instinct packs (react, python, go) into the current project",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pack: { type: "string", description: "Pack name: react, python, or go" },
+      },
+      required: ["pack"],
+    },
+  },
+  {
+    name: "ci_goal_check",
+    description:
+      "Check whether recent tool activity still relates to the stated goal. Reads the '## Goal' section of task_plan.md (plus optional '## Goal Keywords' and '## Goal Scope' sections), scores the last N observations, and reports a drift score with the top off-goal tool calls.",
+    manifestWhat: "Detect when a session has drifted from its stated goal",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          description: "How many recent observations to score (default: 30)",
+          default: 30,
+        },
+        goal_file: {
+          type: "string",
+          description:
+            "Path to a goal/plan markdown file. Defaults to task_plan.md in the project root, then ~/.claude/instincts/<hash>/goal.md",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "ci_recall",
+    description:
+      "Search past tool-call observations with BM25 ranking. Answers 'have I seen this before?' against ~/.claude/instincts/<hash>/observations.jsonl and returns the most relevant past activity with redacted snippets. Lexical, not semantic.",
+    manifestWhat: "Search past sessions for relevant prior activity (episodic recall)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search terms, e.g. an error message or a past task" },
+        k: {
+          type: "number",
+          description: "How many results to return (default: 5)",
+          default: 5,
+        },
+        since: {
+          type: "string",
+          description: "Only search rows newer than this — ISO timestamp or relative window like '7d', '24h', '30m'",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "ci_distill_candidates",
+    description:
+      "List distillation candidates: tool sequences that recurred across multiple successful sessions and could become reusable instincts. Read-only analysis — proposes nothing until you run ci_distill_propose.",
+    manifestWhat: "Find repeated successful tool sequences worth turning into skills",
+    inputSchema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "ci_distill_propose",
+    description:
+      "Write a DRAFT instinct for a distillation candidate to ~/.claude/instincts/<hash>/drafts/. The draft has a placeholder body for you to edit; it does not affect behavior until promoted.",
+    manifestWhat: "Draft a reusable instinct from a repeated successful pattern",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Candidate id from ci_distill_candidates" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "ci_distill_promote",
+    description:
+      "Promote an edited draft into a live project instinct at 0.5 confidence (SUGGEST tier) and consume the draft. Run after editing the draft body produced by ci_distill_propose.",
+    manifestWhat: "Promote an edited draft into a live instinct",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Draft id to promote" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "ci_distill_from_workflow",
+    description:
+      "Draft a reusable instinct from the most recent completed-and-verified native Workflow run in this project's observation feed. A Workflow script is an authored recipe, so a single run whose output passed verification is enough — unlike ci_distill_candidates, which needs a pattern repeated across sessions. Writes a DRAFT to drafts/ (a skeleton you edit); it changes no behavior until promoted with ci_distill_promote. Returns a message when no verified workflow run is found.",
+    manifestWhat: "Draft a reusable instinct from a verified Workflow run",
+    inputSchema: { type: "object", properties: {}, required: [] },
+  },
+];
+
+const MODE_METADATA: Record<PluginMode, ModeMetadata> = {
+  beginner: {
+    description:
+      "Beginner mode: see what your agent learned, list its instincts, and request a session reflection. Bundles three grounding skills (gateguard, tdd-workflow, verification-loop) so research, memory, tests, and verification happen by default — every edit starts from facts, not guesses.",
+    hooks: ["PreToolUse", "PostToolUse", "UserPromptSubmit"],
+    hookDescription:
+      "Silently captures every tool call as observations and routes prompts to the matching skill via the route table. Lightweight and non-blocking.",
+  },
+  expert: {
+    description:
+      "Expert mode: tune confidence, manage instincts, and persist plans on disk. Adds safety, token-budget, and strategic-compact skills plus the /learn-eval command so long sessions stay sharp and learnings survive context resets.",
+    hooks: ["PreToolUse", "PostToolUse", "UserPromptSubmit", "SessionStart", "SessionEnd"],
+    hookDescription:
+      "Full hook suite: observation capture, lazy prompt routing, session-level instinct loading, and auto-reflection.",
+  },
+};
+
+function getToolCatalog(mode: PluginMode): ToolCatalogEntry[] {
+  return mode === "expert"
+    ? [...BEGINNER_TOOL_ENTRIES, ...EXPERT_TOOL_ENTRIES]
+    : [...BEGINNER_TOOL_ENTRIES];
+}
+
+export function getToolDefinitions(mode: PluginMode): ToolDefinition[] {
+  return getToolCatalog(mode).map(({ name, description, inputSchema }) => ({
+    name,
+    description,
+    inputSchema,
+  }));
+}
+
+export function getToolNames(mode: PluginMode): string[] {
+  return getToolCatalog(mode).map((tool) => tool.name);
+}
+
+export function getPluginManifest(mode: PluginMode): PluginManifest {
+  const modeMetadata = MODE_METADATA[mode];
+  const mcpServerConfig = {
+    command: "node",
+    args: ["<install-path>/bin/mcp-server.mjs", "--mode", mode],
+  };
+
+  return {
+    name: PACKAGE_NAME,
+    version: VERSION,
+    mode,
+    description: modeMetadata.description,
+    tools: getToolCatalog(mode).map((tool) => ({
+      name: tool.name,
+      what: tool.manifestWhat,
+    })),
+    setup: {
+      claude_desktop: {
+        mcpServers: {
+          [PACKAGE_NAME]: mcpServerConfig,
+        },
+      },
+      claude_code: {
+        mcpServers: {
+          [PACKAGE_NAME]: mcpServerConfig,
+        },
+      },
+    },
+    hooks: {
+      included: [...modeMetadata.hooks],
+      description: modeMetadata.hookDescription,
+    },
+  };
+}
+
+export function getClaudePluginManifest(): ClaudePluginManifest {
+  return {
+    name: PACKAGE_NAME,
+    version: VERSION,
+    description: SHARED_PLUGIN_DESCRIPTION,
+    author: AUTHOR,
+    homepage: HOMEPAGE_URL,
+    repository: REPOSITORY_URL,
+    license: "MIT",
+    keywords: [...KEYWORDS],
+  };
+}
+
+export function getPluginHooksConfig(): PluginHooksConfig {
+  const gateguardCommand = {
+    type: "command" as const,
+    command: "node \"${CLAUDE_PLUGIN_ROOT}/hooks/gateguard.mjs\"",
+    timeout: 5,
+  };
+  const companionPreferenceCommand = {
+    type: "command" as const,
+    command: "node \"${CLAUDE_PLUGIN_ROOT}/hooks/companion-preference.mjs\"",
+    timeout: 5,
+  };
+  const hookPackCommand = {
+    type: "command" as const,
+    command: "node \"${CLAUDE_PLUGIN_ROOT}/hooks/hook-pack.mjs\"",
+    timeout: 5,
+  };
+  const observeCommand = {
+    type: "command" as const,
+    command: "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/observe.sh\"",
+    timeout: 5,
+  };
+  const sessionCommand = {
+    type: "command" as const,
+    command: "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session.sh\"",
+    timeout: 5,
+  };
+  const threeSectionCloseCommand = {
+    type: "command" as const,
+    command: "node \"${CLAUDE_PLUGIN_ROOT}/hooks/three-section-close.mjs\"",
+    timeout: 5,
+  };
+  const goalDriftStopCommand = {
+    type: "command" as const,
+    command: "node \"${CLAUDE_PLUGIN_ROOT}/hooks/goal-drift-stop.mjs\"",
+    timeout: 5,
+  };
+  const routePromptCommand = {
+    type: "command" as const,
+    command: "node \"${CLAUDE_PLUGIN_ROOT}/hooks/route-prompt.mjs\"",
+    timeout: 5,
+  };
+  const recallBriefingCommand = {
+    type: "command" as const,
+    command: "node \"${CLAUDE_PLUGIN_ROOT}/hooks/recall-briefing.mjs\"",
+    timeout: 5,
+  };
+
+  return {
+    description:
+      "Gateguard fact-forcing PreToolUse, companion-preference enforcement, observation, session lifecycle, 3-section-close discipline, goal-drift Stop gate, and UserPromptSubmit lazy-routing plus opt-in proactive recall-briefing hooks for continuous-improvement.",
+    hooks: {
+      // gateguard runs FIRST on PreToolUse so its block decision short-circuits
+      // before companion-preference sees the call. companion-preference runs
+      // second on Skill tool calls; it is a no-op under ci-first (the default)
+      // and never blocks under companions-first. observe.sh only runs on
+      // PostToolUse: gateguard-blocked calls are intentionally not observed so
+      // PreToolUse stays at two subprocesses on the hot path. route-prompt
+      // fires on UserPromptSubmit and emits a system-reminder when a prompt
+      // pattern in hooks/route-table.json matches; non-matching prompts pass
+      // through with no output.
+      PreToolUse: [
+        { hooks: [gateguardCommand, companionPreferenceCommand] },
+        // hook-pack gates Bash `git push` to protected branches and oversized
+        // `git commit`s. The "Bash" matcher scopes it off the hot path for all
+        // non-Bash tools, so the two-subprocess note above still holds for
+        // Edit/Read/etc. Warn-default (CLAUDE_CI_HOOKPACK_GATE) — never blocks
+        // until the operator opts in.
+        { matcher: "Bash", hooks: [hookPackCommand] },
+      ],
+      PostToolUse: [{ hooks: [observeCommand] }],
+      UserPromptSubmit: [{ hooks: [routePromptCommand, recallBriefingCommand] }],
+      SessionStart: [{ hooks: [sessionCommand] }],
+      SessionEnd: [{ hooks: [sessionCommand] }],
+      Stop: [{ hooks: [threeSectionCloseCommand, goalDriftStopCommand] }],
+    },
+  };
+}
+
+export function getClaudePluginMarketplaceManifest(): ClaudePluginMarketplaceManifest {
+  return {
+    name: `${PACKAGE_NAME}-dev`,
+    description:
+      "Development marketplace for the Continuous Improvement Claude Code plugin.",
+    owner: {
+      name: AUTHOR.name,
+    },
+    plugins: [
+      {
+        name: PACKAGE_NAME,
+        description: SHARED_PLUGIN_DESCRIPTION,
+        version: VERSION,
+        source: "./",
+        author: {
+          name: AUTHOR.name,
+        },
+        category: CLAUDE_PLUGIN_CATEGORY,
+        homepage: REPOSITORY_URL,
+      },
+    ],
+  };
+}
+
+export function getClaudeRepoMarketplaceManifest(
+  extraPlugins: ClaudeMarketplacePluginEntry[] = [],
+): ClaudePluginMarketplaceManifest {
+  return {
+    name: PACKAGE_NAME,
+    description:
+      "Marketplace for the Continuous Improvement Claude Code plugin and four vendored upstream companions (Obra superpowers, addyosmani/agent-skills, ruflo-swarm, oh-my-claudecode). All four companions are pinned-SHA snapshots in third-party/ — see third-party/MANIFEST.md for refresh recipes and per-snapshot OUR_NOTES.md for integration scope. Product-management coverage is provided out-of-band by phuryn/pm-skills via Claude Code's plugin marketplace — see docs/THIRD_PARTY.md.",
+    owner: {
+      name: AUTHOR.name,
+    },
+    plugins: [
+      {
+        name: PACKAGE_NAME,
+        description: SHARED_PLUGIN_DESCRIPTION,
+        version: VERSION,
+        source: `./plugins/${PACKAGE_NAME}`,
+        author: {
+          name: AUTHOR.name,
+        },
+        category: CLAUDE_PLUGIN_CATEGORY,
+        homepage: REPOSITORY_URL,
+      },
+      ...THIRD_PARTY_COMPANIONS,
+      ...extraPlugins,
+    ],
+  };
+}

@@ -1,0 +1,59 @@
+name: Test GITHUB_OUTPUT integration writes violations and score
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: 'tests/fixtures/clean-transcript.jsonl'
+          strict: 'false'
+        continue-on-error: true
+
+      - name: Run linter with GITHUB_OUTPUT set for clean transcript
+        run: |
+          TMPFILE=$(mktemp)
+          GITHUB_OUTPUT="$TMPFILE" node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" \
+            "$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl"
+          echo "--- GITHUB_OUTPUT contents ---"
+          cat "$TMPFILE"
+          VIOLATIONS=$(grep '^violations=' "$TMPFILE" | cut -d= -f2)
+          SCORE=$(grep '^score=' "$TMPFILE" | cut -d= -f2)
+          echo "violations: $VIOLATIONS"
+          echo "score: $SCORE"
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected violations=0 in GITHUB_OUTPUT but got '$VIOLATIONS'"
+            exit 1
+          fi
+          if [ "$SCORE" != "100" ]; then
+            echo "FAIL: expected score=100 in GITHUB_OUTPUT but got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: GITHUB_OUTPUT correctly set violations=0 and score=100"
+
+      - name: Run linter with GITHUB_OUTPUT set for bad transcript
+        run: |
+          TMPFILE=$(mktemp)
+          set +e
+          GITHUB_OUTPUT="$TMPFILE" node "$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs" \
+            "$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl"
+          set -e
+          echo "--- GITHUB_OUTPUT contents ---"
+          cat "$TMPFILE"
+          VIOLATIONS=$(grep '^violations=' "$TMPFILE" | cut -d= -f2)
+          SCORE=$(grep '^score=' "$TMPFILE" | cut -d= -f2)
+          echo "violations: $VIOLATIONS"
+          echo "score: $SCORE"
+          if [ -z "$VIOLATIONS" ] || [ "$VIOLATIONS" = "0" ]; then
+            echo "FAIL: expected violations > 0 in GITHUB_OUTPUT but got '$VIOLATIONS'"
+            exit 1
+          fi
+          if [ "$SCORE" = "100" ]; then
+            echo "FAIL: expected score < 100 in GITHUB_OUTPUT but got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: GITHUB_OUTPUT correctly set violations=$VIOLATIONS and score=$SCORE"
