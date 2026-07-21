@@ -1,0 +1,5 @@
+{"tool":"Write","tool_input":{"file_path":"src/a.js"},"session_id":"session-1"}
+{"tool":"Write","tool_input":{"file_path":"src/b.js"},"session_id":"session-1"}
+{"tool":"Write","tool_input":{"file_path":"src/c.js"},"session_id":"session-1"}
+{"tool":"Edit","tool_input":{"file_path":"src/d.js"},"session_id":"session-1"}
+{"tool":"Edit","tool_input":{"file_path":"src/e.js"},"session_id":"session-1"}

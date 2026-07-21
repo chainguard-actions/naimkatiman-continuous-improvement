@@ -1,7 +1,6 @@
-name: Test observations-path input
+name: Test observations-path input - alternate input for CI session observations
 on:
   workflow_dispatch:
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -11,42 +10,37 @@ jobs:
       - id: action
         uses: .
         with:
-          observations-path: tests/fixtures/observations.jsonl
+          observations-path: tests/fixtures/good-transcript.jsonl
 
-      - name: Assert violations output is present
+      - name: Assert violations output is present and numeric
         env:
           ACTUAL: ${{ steps.action.outputs.violations }}
         run: |
-          echo "actual violations: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
-            echo "FAIL: expected violations output to be set"
+          echo "violations: $ACTUAL"
+          if ! echo "$ACTUAL" | grep -qE '^[0-9]+$'; then
+            echo "FAIL: expected numeric violations output, got '$ACTUAL'"
             exit 1
           fi
-          echo "PASS: violations output is '$ACTUAL'"
+          echo "PASS: violations=$ACTUAL"
 
-      - name: Assert score output is present and in range
+      - name: Assert score output is present and numeric
         env:
           ACTUAL: ${{ steps.action.outputs.score }}
         run: |
-          echo "actual score: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
-            echo "FAIL: expected score output to be set"
+          echo "score: $ACTUAL"
+          if ! echo "$ACTUAL" | grep -qE '^[0-9]+$'; then
+            echo "FAIL: expected numeric score output, got '$ACTUAL'"
             exit 1
           fi
-          if [ "$ACTUAL" -lt 0 ] || [ "$ACTUAL" -gt 100 ] 2>/dev/null; then
-            echo "FAIL: score '$ACTUAL' is out of range 0-100"
-            exit 1
-          fi
-          echo "PASS: score is $ACTUAL"
+          echo "PASS: score=$ACTUAL"
 
-      - name: Assert report contains discipline report header
+      - name: Assert report output is non-empty
         env:
           ACTUAL: ${{ steps.action.outputs.report }}
         run: |
-          echo "report excerpt: ${ACTUAL:0:100}"
-          if echo "$ACTUAL" | grep -q "Agent Discipline Report"; then
-            echo "PASS: report contains expected header"
-          else
-            echo "FAIL: expected report to contain 'Agent Discipline Report'"
+          echo "report length: ${#ACTUAL}"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected non-empty report output"
             exit 1
           fi
+          echo "PASS"

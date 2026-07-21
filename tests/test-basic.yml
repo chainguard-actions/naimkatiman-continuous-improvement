@@ -1,7 +1,6 @@
-name: Test basic usage - clean transcript
+name: Test basic usage - clean transcript no violations
 on:
   workflow_dispatch:
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -11,37 +10,37 @@ jobs:
       - id: action
         uses: .
         with:
-          transcript-path: tests/fixtures/clean-transcript.jsonl
+          transcript-path: tests/fixtures/good-transcript.jsonl
 
-      - name: Assert violations output is 0
+      - name: Assert violations is 0
         env:
           ACTUAL: ${{ steps.action.outputs.violations }}
         run: |
-          echo "actual violations: $ACTUAL"
+          echo "violations: $ACTUAL"
           if [ "$ACTUAL" != "0" ]; then
             echo "FAIL: expected 0 violations, got '$ACTUAL'"
             exit 1
           fi
           echo "PASS"
 
-      - name: Assert score output is 100
+      - name: Assert score is 100
         env:
           ACTUAL: ${{ steps.action.outputs.score }}
         run: |
-          echo "actual score: $ACTUAL"
+          echo "score: $ACTUAL"
           if [ "$ACTUAL" != "100" ]; then
             echo "FAIL: expected score 100, got '$ACTUAL'"
             exit 1
           fi
           echo "PASS"
 
-      - name: Assert report output is non-empty
+      - name: Assert report contains no violations message
         env:
           ACTUAL: ${{ steps.action.outputs.report }}
         run: |
-          echo "actual report length: ${#ACTUAL}"
-          if [ -z "$ACTUAL" ]; then
-            echo "FAIL: expected non-empty report"
+          echo "report: $ACTUAL"
+          if ! echo "$ACTUAL" | grep -q "No law violations detected"; then
+            echo "FAIL: expected 'No law violations detected' in report"
             exit 1
           fi
           echo "PASS"

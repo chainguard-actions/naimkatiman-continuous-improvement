@@ -1,7 +1,6 @@
-name: Test violations detected
+name: Test violations detected - writes without research
 on:
   workflow_dispatch:
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -11,38 +10,37 @@ jobs:
       - id: action
         uses: .
         with:
-          transcript-path: tests/fixtures/violations-transcript.jsonl
+          transcript-path: tests/fixtures/bad-transcript.jsonl
 
-      - name: Assert violations output is greater than 0
+      - name: Assert violations is greater than 0
         env:
           ACTUAL: ${{ steps.action.outputs.violations }}
         run: |
-          echo "actual violations: $ACTUAL"
+          echo "violations: $ACTUAL"
           if [ -z "$ACTUAL" ] || [ "$ACTUAL" -le 0 ] 2>/dev/null; then
             echo "FAIL: expected violations > 0, got '$ACTUAL'"
             exit 1
           fi
-          echo "PASS: $ACTUAL violation(s) detected"
+          echo "PASS: violations=$ACTUAL"
 
       - name: Assert score is less than 100
         env:
           ACTUAL: ${{ steps.action.outputs.score }}
         run: |
-          echo "actual score: $ACTUAL"
+          echo "score: $ACTUAL"
           if [ -z "$ACTUAL" ] || [ "$ACTUAL" -ge 100 ] 2>/dev/null; then
             echo "FAIL: expected score < 100, got '$ACTUAL'"
             exit 1
           fi
-          echo "PASS: score is $ACTUAL"
+          echo "PASS: score=$ACTUAL"
 
-      - name: Assert report mentions violations
+      - name: Assert report contains violations section
         env:
           ACTUAL: ${{ steps.action.outputs.report }}
         run: |
-          echo "report excerpt: ${ACTUAL:0:200}"
-          if echo "$ACTUAL" | grep -qi "violation"; then
-            echo "PASS: report mentions violations"
-          else
-            echo "FAIL: expected report to mention violations"
+          echo "report: $ACTUAL"
+          if ! echo "$ACTUAL" | grep -qi "violation"; then
+            echo "FAIL: expected 'violation' in report"
             exit 1
           fi
+          echo "PASS"
