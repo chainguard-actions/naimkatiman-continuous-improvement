@@ -1,0 +1,46 @@
+name: Test violations detection - bad transcript
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: tests/fixtures/bad-transcript.jsonl
+
+      - name: Assert violations is greater than 0
+        env:
+          ACTUAL: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "actual violations: $ACTUAL"
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" -le 0 ] 2>/dev/null; then
+            echo "FAIL: expected violations > 0, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: violations=$ACTUAL (> 0)"
+
+      - name: Assert score is less than 100
+        env:
+          ACTUAL: ${{ steps.action.outputs.score }}
+        run: |
+          echo "actual score: $ACTUAL"
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" -ge 100 ] 2>/dev/null; then
+            echo "FAIL: expected score < 100, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: score=$ACTUAL (< 100)"
+
+      - name: Assert report contains violations section
+        env:
+          ACTUAL: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $ACTUAL"
+          if ! echo "$ACTUAL" | grep -qi "violations"; then
+            echo "FAIL: expected 'violations' in report"
+            exit 1
+          fi
+          echo "PASS: report contains violations section"

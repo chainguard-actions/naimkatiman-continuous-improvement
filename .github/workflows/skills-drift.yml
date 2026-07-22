@@ -6,15 +6,14 @@ on:
       - 'third-party/superpowers/**'
       - 'plugins/continuous-improvement/skills/superpowers/SKILL.md'
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   skills-drift:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: List upstream snapshot skill directories
         run: |

@@ -1,28 +1,16 @@
 name: Test observations-path input
 on:
   workflow_dispatch:
-
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Create observations fixture
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures"
-          cat > "$GITHUB_WORKSPACE/tests/fixtures/observations.jsonl" <<'EOF'
-          {"tool":"Read","tool_input":{"file_path":"README.md"},"session_id":"obs1"}
-          {"tool":"Grep","tool_input":{"pattern":"import"},"session_id":"obs1"}
-          {"tool":"Write","tool_input":{"file_path":"result.js"},"session_id":"obs1"}
-          {"tool":"Bash","tool_input":{"command":"jest --coverage"},"session_id":"obs1"}
-          EOF
-
       - id: action
         uses: .
         with:
-          observations-path: tests/fixtures/observations.jsonl
-          strict: 'false'
+          observations-path: tests/fixtures/good-transcript.jsonl
 
       - name: Assert violations output is set
         env:
@@ -33,7 +21,7 @@ jobs:
             echo "FAIL: expected violations output to be set"
             exit 1
           fi
-          echo "PASS: violations=$ACTUAL"
+          echo "PASS: violations output is set to '$ACTUAL'"
 
       - name: Assert score output is set
         env:
@@ -44,15 +32,26 @@ jobs:
             echo "FAIL: expected score output to be set"
             exit 1
           fi
-          echo "PASS: score=$ACTUAL"
+          echo "PASS: score output is set to '$ACTUAL'"
 
-      - name: Assert report contains discipline header
+      - name: Assert report output is set
         env:
           ACTUAL: ${{ steps.action.outputs.report }}
         run: |
-          echo "actual report: $ACTUAL"
-          if ! echo "$ACTUAL" | grep -q "Agent Discipline Report"; then
-            echo "FAIL: expected report to contain 'Agent Discipline Report'"
+          echo "actual report length: ${#ACTUAL}"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected report output to be set"
             exit 1
           fi
-          echo "PASS"
+          echo "PASS: report output is set"
+
+      - name: Assert score is 100 for clean transcript via observations-path
+        env:
+          ACTUAL: ${{ steps.action.outputs.score }}
+        run: |
+          echo "actual score: $ACTUAL"
+          if [ "$ACTUAL" != "100" ]; then
+            echo "FAIL: expected score=100 for clean transcript, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: score=100"

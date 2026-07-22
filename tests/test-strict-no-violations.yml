@@ -1,0 +1,31 @@
+name: Test strict mode - no violations means success
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: tests/fixtures/good-transcript.jsonl
+          strict: 'true'
+
+      - name: Assert action succeeded with no violations in strict mode
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          echo "score: $SCORE"
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected 0 violations, got '$VIOLATIONS'"
+            exit 1
+          fi
+          if [ "$SCORE" != "100" ]; then
+            echo "FAIL: expected score=100, got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: strict mode with clean transcript succeeded"
