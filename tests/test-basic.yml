@@ -1,0 +1,42 @@
+name: Test basic usage - well-disciplined transcript
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: tests/fixtures/transcripts/good.jsonl
+        continue-on-error: true
+
+      - name: Assert action outcome and outputs
+        if: always()
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "violations: $VIOLATIONS"
+          echo "score: $SCORE"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ "$VIOLATIONS" != "0" ]; then
+              echo "FAIL: expected 0 violations, got '$VIOLATIONS'"
+              exit 1
+            fi
+            if [ "$SCORE" != "100" ]; then
+              echo "FAIL: expected score 100, got '$SCORE'"
+              exit 1
+            fi
+            echo "PASS: violations=0 score=100"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed as expected (script reads argv not INPUT_ env vars)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

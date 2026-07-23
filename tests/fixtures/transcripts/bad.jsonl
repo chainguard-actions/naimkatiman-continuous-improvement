@@ -1,0 +1,3 @@
+{"tool":"Write","tool_input":{"file_path":"file1.txt"},"session_id":"abc123"}
+{"tool":"Write","tool_input":{"file_path":"file2.txt"},"session_id":"abc123"}
+{"tool":"Write","tool_input":{"file_path":"file3.txt"},"session_id":"abc123"}

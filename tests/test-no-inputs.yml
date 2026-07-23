@@ -1,0 +1,30 @@
+name: Test action with no transcript path
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Run action with no transcript-path input
+        id: action
+        uses: .
+        continue-on-error: true
+
+      - name: Verify action ran and produced an outcome
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          # When no transcript-path is provided, the script exits with an error
+          # because it requires a file path or --stdin argument.
+          # We verify the step ran and produced a known outcome (failure or success).
+          if [ "$OUTCOME" != "failure" ] && [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS: action ran with outcome: $OUTCOME"

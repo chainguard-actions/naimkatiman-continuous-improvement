@@ -1,0 +1,27 @@
+name: Test no-input default behavior
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # With no transcript-path or observations-path, the script exits with code 1
+      # because it requires a file path argument (reads from process.argv, not INPUT_ env vars)
+      - id: action
+        uses: .
+        continue-on-error: true
+
+      - name: Assert action failed gracefully with no input
+        if: always()
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: expected action to fail with no input, got '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS: action correctly failed when no transcript path provided"

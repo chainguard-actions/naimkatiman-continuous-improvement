@@ -1,0 +1,4 @@
+{"tool":"Grep","tool_input":{"pattern":"foo","path":"."},"session_id":"abc123"}
+{"tool":"Read","tool_input":{"file_path":"README.md"},"session_id":"abc123"}
+{"tool":"Write","tool_input":{"file_path":"output.txt"},"session_id":"abc123"}
+{"tool":"Bash","tool_input":{"command":"npm run test"},"session_id":"abc123"}

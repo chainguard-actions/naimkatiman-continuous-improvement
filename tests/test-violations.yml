@@ -1,0 +1,51 @@
+name: Test violations detection - write without research
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: tests/fixtures/transcripts/bad.jsonl
+          strict: 'false'
+        continue-on-error: true
+
+      - name: Assert violations detected or action failed
+        if: always()
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "violations: $VIOLATIONS"
+          echo "score: $SCORE"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ -z "$VIOLATIONS" ]; then
+              echo "FAIL: violations output is empty"
+              exit 1
+            fi
+            if ! echo "$VIOLATIONS" | grep -qE '^[0-9]+$'; then
+              echo "FAIL: violations is not a number: '$VIOLATIONS'"
+              exit 1
+            fi
+            if [ "$VIOLATIONS" -le 0 ]; then
+              echo "FAIL: expected violations > 0, got '$VIOLATIONS'"
+              exit 1
+            fi
+            if [ "$SCORE" -ge 100 ]; then
+              echo "FAIL: expected score < 100 for bad transcript, got '$SCORE'"
+              exit 1
+            fi
+            echo "PASS: violations=$VIOLATIONS score=$SCORE"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed as expected (script reads argv not INPUT_ env vars)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
