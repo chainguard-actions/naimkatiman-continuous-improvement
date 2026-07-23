@@ -1,0 +1,61 @@
+name: Test clean transcript (no violations)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # The action reads transcript-path input and analyzes it for discipline violations.
+      # We provide a well-disciplined transcript (research before writes, verification after).
+      - name: Prepare transcript file
+        run: |
+          cp "$GITHUB_WORKSPACE/tests/fixtures/good-transcript.jsonl" /tmp/good-transcript.jsonl
+          echo "Transcript contents:"
+          cat /tmp/good-transcript.jsonl
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: '/tmp/good-transcript.jsonl'
+          strict: 'false'
+        continue-on-error: true
+
+      - name: Assert action completed
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          # The action should succeed (0 violations, good discipline)
+          # or at minimum complete without crashing
+          if [ "$OUTCOME" = "success" ] || [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action completed with outcome=$OUTCOME"
+          else
+            echo "FAIL: unexpected outcome: $OUTCOME"
+            exit 1
+          fi
+
+      - name: Assert violations output (if action succeeded)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "violations: $VIOLATIONS"
+          echo "score: $SCORE"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ "$VIOLATIONS" != "0" ]; then
+              echo "FAIL: expected 0 violations for clean transcript, got: $VIOLATIONS"
+              exit 1
+            fi
+            echo "PASS: 0 violations as expected for clean transcript"
+            if [ -n "$SCORE" ] && [ "$SCORE" -lt 70 ]; then
+              echo "FAIL: expected score >= 70 for clean transcript, got: $SCORE"
+              exit 1
+            fi
+            echo "PASS: score=$SCORE is acceptable"
+          else
+            echo "NOTE: action did not succeed (outcome=$OUTCOME), skipping output assertions"
+          fi

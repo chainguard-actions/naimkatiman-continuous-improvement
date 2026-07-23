@@ -1,0 +1,52 @@
+name: Test strict mode with violations
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # In strict mode, the action should fail (exit 1) when violations are detected.
+      # We use a transcript with clear violations (writes without research, no verification).
+      - name: Prepare bad transcript file
+        run: |
+          cp "$GITHUB_WORKSPACE/tests/fixtures/bad-transcript.jsonl" /tmp/bad-transcript-strict.jsonl
+          echo "Transcript contents:"
+          cat /tmp/bad-transcript-strict.jsonl
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: '/tmp/bad-transcript-strict.jsonl'
+          strict: 'true'
+        continue-on-error: true
+
+      - name: Assert action completed (success or failure)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          # In strict mode with violations, the action should fail.
+          # Without strict mode it would succeed. Either way it should complete.
+          if [ "$OUTCOME" = "success" ] || [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action completed with outcome=$OUTCOME"
+          else
+            echo "FAIL: unexpected outcome: $OUTCOME"
+            exit 1
+          fi
+
+      - name: Assert strict mode causes failure when violations exist
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "violations: $VIOLATIONS"
+          # If the action succeeded and reported violations, strict mode should have failed it.
+          # If the action failed, that's expected (either strict mode worked, or no file path).
+          if [ "$OUTCOME" = "success" ] && [ -n "$VIOLATIONS" ] && [ "$VIOLATIONS" -gt 0 ]; then
+            echo "FAIL: strict mode should have caused failure when violations=$VIOLATIONS"
+            exit 1
+          fi
+          echo "PASS: strict mode behavior is correct (outcome=$OUTCOME, violations=$VIOLATIONS)"

@@ -1,0 +1,3 @@
+{"tool":"Write","tool_input":{"file_path":"src/main.js","content":"// changed"},"session_id":"session-002"}
+{"tool":"Write","tool_input":{"file_path":"src/utils.js","content":"// changed"},"session_id":"session-002"}
+{"tool":"Edit","tool_input":{"file_path":"src/helper.js","content":"// changed"},"session_id":"session-002"}

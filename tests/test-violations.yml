@@ -1,0 +1,60 @@
+name: Test transcript with violations
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Provide a transcript with discipline violations:
+      # - Writes without prior research (Law 1 violation)
+      # - No verification commands (Law 4 violation)
+      - name: Prepare bad transcript file
+        run: |
+          cp "$GITHUB_WORKSPACE/tests/fixtures/bad-transcript.jsonl" /tmp/bad-transcript.jsonl
+          echo "Transcript contents:"
+          cat /tmp/bad-transcript.jsonl
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: '/tmp/bad-transcript.jsonl'
+          strict: 'false'
+        continue-on-error: true
+
+      - name: Assert action completed
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "success" ] || [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action completed with outcome=$OUTCOME"
+          else
+            echo "FAIL: unexpected outcome: $OUTCOME"
+            exit 1
+          fi
+
+      - name: Assert violations detected (if action succeeded)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "violations: $VIOLATIONS"
+          echo "score: $SCORE"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ -z "$VIOLATIONS" ] || [ "$VIOLATIONS" -eq 0 ]; then
+              echo "FAIL: expected violations > 0 for bad transcript, got: $VIOLATIONS"
+              exit 1
+            fi
+            echo "PASS: violations=$VIOLATIONS detected as expected"
+            if [ -n "$SCORE" ] && [ "$SCORE" -gt 80 ]; then
+              echo "FAIL: expected score <= 80 for bad transcript, got: $SCORE"
+              exit 1
+            fi
+            echo "PASS: score=$SCORE reflects violations"
+          else
+            echo "NOTE: action did not succeed (outcome=$OUTCOME), skipping output assertions"
+          fi

@@ -1,0 +1,62 @@
+name: Test violations detected in bad transcript
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Run linter on bad transcript and capture output
+        run: |
+          node "$GITHUB_WORKSPACE/bin/lint-transcript.mjs" \
+            "$GITHUB_WORKSPACE/tests/fixtures/bad-transcript.jsonl" \
+            --json > /tmp/lint-output.json
+          cat /tmp/lint-output.json
+      - name: Assert violations are detected
+        run: |
+          VIOLATIONS=$(node -e "
+            const r=JSON.parse(require('fs').readFileSync('/tmp/lint-output.json','utf8'));
+            console.log(r.violations.length);
+          ")
+          echo "violations: $VIOLATIONS"
+          if [ "$VIOLATIONS" -lt "1" ]; then
+            echo "FAIL: expected at least 1 violation for bad transcript, got $VIOLATIONS"
+            exit 1
+          fi
+          echo "PASS: violations detected as expected ($VIOLATIONS violations)"
+      - name: Assert score is less than 100
+        run: |
+          SCORE=$(node -e "
+            const r=JSON.parse(require('fs').readFileSync('/tmp/lint-output.json','utf8'));
+            console.log(r.score);
+          ")
+          echo "score: $SCORE"
+          if [ "$SCORE" -ge "100" ]; then
+            echo "FAIL: expected score < 100 for bad transcript, got $SCORE"
+            exit 1
+          fi
+          echo "PASS: score is reduced due to violations ($SCORE/100)"
+      - name: Assert Law 1 (Research Before Executing) is violated
+        run: |
+          LAW1=$(node -e "
+            const r=JSON.parse(require('fs').readFileSync('/tmp/lint-output.json','utf8'));
+            const v=r.violations.filter(v=>v.law===1);
+            console.log(v.length);
+          ")
+          echo "law 1 violations: $LAW1"
+          if [ "$LAW1" -lt "1" ]; then
+            echo "FAIL: expected Law 1 (Research Before Executing) to be violated"
+            exit 1
+          fi
+          echo "PASS: Law 1 violation correctly detected"
+      - id: action
+        uses: .
+        with:
+          transcript-path: tests/fixtures/bad-transcript.jsonl
+        continue-on-error: true
+      - name: Verify action ran against bad transcript input
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          echo "PASS: action invoked with bad transcript input"

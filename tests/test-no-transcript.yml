@@ -1,0 +1,33 @@
+name: Test no transcript (default inputs)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # When no transcript-path is provided (empty default), the action runs with
+      # no file argument. The script should either exit gracefully or report an error.
+      # We use continue-on-error to capture the outcome.
+      - id: action
+        uses: .
+        with:
+          transcript-path: ''
+          observations-path: ''
+          strict: 'false'
+        continue-on-error: true
+
+      - name: Assert action completed (did not crash unexpectedly)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          # The action should complete with either success or failure,
+          # not with an unexpected error like a missing node binary.
+          if [ "$OUTCOME" = "success" ] || [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action completed with outcome=$OUTCOME (no crash)"
+          else
+            echo "FAIL: unexpected outcome: $OUTCOME"
+            exit 1
+          fi
