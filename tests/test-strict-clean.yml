@@ -1,0 +1,43 @@
+name: Test strict mode passes on clean transcript
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create clean transcript fixture
+        run: |
+          # Research first, then write, then verify — no violations expected
+          cat > /tmp/strict-clean.jsonl <<'EOF'
+          {"tool":"Read","tool_input":{"file_path":"package.json"},"session_id":"clean-001"}
+          {"tool":"Glob","tool_input":{"pattern":"src/**/*.ts"},"session_id":"clean-001"}
+          {"tool":"Grep","tool_input":{"pattern":"import"},"session_id":"clean-001"}
+          {"tool":"Write","tool_input":{"file_path":"src/index.ts"},"session_id":"clean-001"}
+          {"tool":"Bash","tool_input":{"command":"npm run build"},"session_id":"clean-001"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/strict-clean.jsonl
+          strict: 'true'
+
+      - name: Assert action succeeded in strict mode with clean transcript
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          echo "score: $SCORE"
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected 0 violations in strict mode with clean transcript, got $VIOLATIONS"
+            exit 1
+          fi
+          if [ "$SCORE" != "100" ]; then
+            echo "FAIL: expected score 100, got $SCORE"
+            exit 1
+          fi
+          echo "PASS: strict mode passed with clean transcript"

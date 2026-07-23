@@ -10,11 +10,12 @@ jobs:
 
       - name: Create observations fixture
         run: |
+          # A clean session: research first, then write, then verify
           cat > /tmp/observations.jsonl <<'EOF'
-          {"tool":"Read","tool_input":{"file_path":"src/main.js"},"session_id":"obs1"}
-          {"tool":"Grep","tool_input":{"pattern":"function"},"session_id":"obs1"}
-          {"tool":"Write","tool_input":{"file_path":"src/main.js"},"session_id":"obs1"}
-          {"tool":"Bash","tool_input":{"command":"jest --coverage"},"session_id":"obs1"}
+          {"tool":"Read","tool_input":{"file_path":"src/main.js"},"session_id":"obs-001"}
+          {"tool":"Grep","tool_input":{"pattern":"TODO"},"session_id":"obs-001"}
+          {"tool":"Write","tool_input":{"file_path":"src/main.js"},"session_id":"obs-001"}
+          {"tool":"Bash","tool_input":{"command":"jest --coverage"},"session_id":"obs-001"}
           EOF
 
       - id: action
@@ -23,35 +24,35 @@ jobs:
           observations-path: /tmp/observations.jsonl
           strict: 'false'
 
-      - name: Assert violations output is set
+      - name: Assert violations is zero
         env:
-          ACTUAL: ${{ steps.action.outputs.violations }}
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
         run: |
-          echo "actual violations: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
-            echo "FAIL: expected violations output to be set"
+          echo "violations: $VIOLATIONS"
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected 0 violations, got $VIOLATIONS"
             exit 1
           fi
-          echo "PASS: violations output is set to '$ACTUAL'"
+          echo "PASS"
 
-      - name: Assert score output is set
+      - name: Assert score output is present and numeric
         env:
-          ACTUAL: ${{ steps.action.outputs.score }}
+          SCORE: ${{ steps.action.outputs.score }}
         run: |
-          echo "actual score: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
-            echo "FAIL: expected score output to be set"
+          echo "score: $SCORE"
+          if ! echo "$SCORE" | grep -qE '^[0-9]+$'; then
+            echo "FAIL: expected numeric score, got '$SCORE'"
             exit 1
           fi
-          echo "PASS: score output is set to '$ACTUAL'"
+          echo "PASS: score is $SCORE"
 
-      - name: Assert report contains discipline report header
+      - name: Assert report contains discipline header
         env:
-          ACTUAL: ${{ steps.action.outputs.report }}
+          REPORT: ${{ steps.action.outputs.report }}
         run: |
-          echo "actual report: $ACTUAL"
-          if ! echo "$ACTUAL" | grep -q "Agent Discipline Report"; then
+          echo "report: $REPORT"
+          if ! echo "$REPORT" | grep -q "Agent Discipline Report"; then
             echo "FAIL: expected report to contain 'Agent Discipline Report'"
             exit 1
           fi
-          echo "PASS: report contains expected header"
+          echo "PASS"

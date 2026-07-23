@@ -1,0 +1,65 @@
+name: Test Law 3 and Law 6 violations (consecutive edits, too many files)
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create transcript with many consecutive edits and many files
+        run: |
+          # 6+ consecutive edits triggers Law 3; 9+ different files triggers Law 6
+          # Research first to avoid Law 1 violation, but no verify (Law 4)
+          python3 -c "
+          import json
+          lines = []
+          # One research op first
+          lines.append(json.dumps({'tool': 'Read', 'tool_input': {'file_path': 'README.md'}, 'session_id': 'sess-law3'}))
+          # 9 consecutive edits to 9 different files (triggers Law 3 at >5 and Law 6 at >8 files)
+          for i in range(9):
+              lines.append(json.dumps({'tool': 'Edit', 'tool_input': {'file_path': f'src/file{i}.js'}, 'session_id': 'sess-law3'}))
+          # One verify to avoid Law 4
+          lines.append(json.dumps({'tool': 'Bash', 'tool_input': {'command': 'npm run test'}, 'session_id': 'sess-law3'}))
+          print('\n'.join(lines))
+          " > /tmp/law3-law6.jsonl
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/law3-law6.jsonl
+          strict: 'false'
+
+      - name: Assert violations are detected
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if [ -z "$VIOLATIONS" ] || [ "$VIOLATIONS" -le 0 ]; then
+            echo "FAIL: expected violations > 0 for consecutive edits and many files, got $VIOLATIONS"
+            exit 1
+          fi
+          echo "PASS: $VIOLATIONS violation(s) detected"
+
+      - name: Assert score is below 100
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ] || [ "$SCORE" -ge 100 ]; then
+            echo "FAIL: expected score < 100, got $SCORE"
+            exit 1
+          fi
+          echo "PASS: score is $SCORE"
+
+      - name: Assert report mentions law violations
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if ! echo "$REPORT" | grep -qi "law"; then
+            echo "FAIL: expected report to mention law violations"
+            exit 1
+          fi
+          echo "PASS"
