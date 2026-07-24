@@ -1,0 +1,67 @@
+name: Test violations detected (writes without research)
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a transcript with writes before any research and no verification
+        run: |
+          cat > /tmp/bad-transcript.jsonl <<'EOF'
+          {"tool":"Write","tool_input":{"file_path":"src/a.js"},"session_id":"sess-1"}
+          {"tool":"Write","tool_input":{"file_path":"src/b.js"},"session_id":"sess-1"}
+          {"tool":"Edit","tool_input":{"file_path":"src/c.js"},"session_id":"sess-1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/bad-transcript.jsonl
+          strict: 'false'
+
+      - name: Assert violations is greater than 0
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if [ -z "$VIOLATIONS" ] || [ "$VIOLATIONS" -le 0 ] 2>/dev/null; then
+            echo "FAIL: expected violations > 0, got '$VIOLATIONS'"
+            exit 1
+          fi
+          echo "PASS: $VIOLATIONS violation(s) detected"
+
+      - name: Assert score is less than 100
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ] || [ "$SCORE" -ge 100 ] 2>/dev/null; then
+            echo "FAIL: expected score < 100, got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: score is $SCORE"
+
+      - name: Assert report contains violations section
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if ! echo "$REPORT" | grep -q "Violations"; then
+            echo "FAIL: expected 'Violations' in report"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert report mentions Law 1 (Research Before Executing)
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if ! echo "$REPORT" | grep -q "Law 1"; then
+            echo "FAIL: expected 'Law 1' violation in report"
+            exit 1
+          fi
+          echo "PASS"

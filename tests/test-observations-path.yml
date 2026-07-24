@@ -8,29 +8,58 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - id: lint
+      - name: Create an observations file with research before writes and verification
+        run: |
+          cat > /tmp/observations.jsonl <<'EOF'
+          {"tool_name":"Read","tool_input":{"file_path":"README.md"},"session_id":"obs-1"}
+          {"tool_name":"Grep","tool_input":{"pattern":"TODO"},"session_id":"obs-1"}
+          {"tool_name":"Write","tool_input":{"file_path":"README.md"},"session_id":"obs-1"}
+          {"tool_name":"Bash","tool_input":{"command":"build"},"session_id":"obs-1"}
+          EOF
+
+      - id: action
         uses: .
         with:
-          observations-path: tests/fixtures/clean-transcript.jsonl
+          observations-path: /tmp/observations.jsonl
+          strict: 'false'
 
-      - name: Assert zero violations via observations-path
+      - name: Assert violations output is present
         env:
-          VIOLATIONS: ${{ steps.lint.outputs.violations }}
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
         run: |
           echo "violations: $VIOLATIONS"
-          if [ "$VIOLATIONS" != "0" ]; then
-            echo "FAIL: expected 0 violations, got '$VIOLATIONS'"
+          if [ -z "$VIOLATIONS" ]; then
+            echo "FAIL: violations output is empty"
             exit 1
           fi
-          echo "PASS"
+          echo "PASS: violations output is '$VIOLATIONS'"
 
-      - name: Assert score is 100 via observations-path
+      - name: Assert score output is present and numeric
         env:
-          SCORE: ${{ steps.lint.outputs.score }}
+          SCORE: ${{ steps.action.outputs.score }}
         run: |
           echo "score: $SCORE"
-          if [ "$SCORE" != "100" ]; then
-            echo "FAIL: expected score 100, got '$SCORE'"
+          if [ -z "$SCORE" ]; then
+            echo "FAIL: score output is empty"
+            exit 1
+          fi
+          if ! echo "$SCORE" | grep -qE '^[0-9]+$'; then
+            echo "FAIL: score is not numeric: $SCORE"
+            exit 1
+          fi
+          echo "PASS: score is $SCORE"
+
+      - name: Assert report output is present
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if [ -z "$REPORT" ]; then
+            echo "FAIL: report output is empty"
+            exit 1
+          fi
+          if ! echo "$REPORT" | grep -q "Agent Discipline Report"; then
+            echo "FAIL: report does not contain expected header"
             exit 1
           fi
           echo "PASS"

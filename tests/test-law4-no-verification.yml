@@ -1,0 +1,57 @@
+name: Test Law 4 violation - writes without verification
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create transcript with research and writes but no verification
+        run: |
+          cat > /tmp/no-verify-transcript.jsonl <<'EOF'
+          {"tool":"Read","tool_input":{"file_path":"src/main.js"},"session_id":"sess-1"}
+          {"tool":"Grep","tool_input":{"pattern":"function"},"session_id":"sess-1"}
+          {"tool":"Write","tool_input":{"file_path":"src/main.js"},"session_id":"sess-1"}
+          {"tool":"Edit","tool_input":{"file_path":"src/util.js"},"session_id":"sess-1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/no-verify-transcript.jsonl
+          strict: 'false'
+
+      - name: Assert violations is greater than 0 (Law 4 - no verification)
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if [ -z "$VIOLATIONS" ] || [ "$VIOLATIONS" -le 0 ] 2>/dev/null; then
+            echo "FAIL: expected violations > 0 for no-verification transcript, got '$VIOLATIONS'"
+            exit 1
+          fi
+          echo "PASS: $VIOLATIONS violation(s) detected"
+
+      - name: Assert report mentions Law 4 (Verify Before Reporting)
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if ! echo "$REPORT" | grep -q "Law 4"; then
+            echo "FAIL: expected 'Law 4' violation in report"
+            exit 1
+          fi
+          echo "PASS: Law 4 violation detected"
+
+      - name: Assert score is less than 100
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ] || [ "$SCORE" -ge 100 ] 2>/dev/null; then
+            echo "FAIL: expected score < 100, got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: score is $SCORE"
