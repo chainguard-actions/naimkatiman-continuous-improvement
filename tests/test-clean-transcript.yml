@@ -1,0 +1,63 @@
+name: Test clean transcript with no violations
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Run linter directly and verify clean output (JSON mode)
+        run: |
+          FIXTURE="tests/fixtures/clean.jsonl"
+          OUTPUT=$(node bin/lint-transcript.mjs "$FIXTURE" --json)
+          echo "Output: $OUTPUT"
+          VIOLATIONS=$(echo "$OUTPUT" | node -e "const d=require('fs').readFileSync('/dev/stdin','utf8'); const r=JSON.parse(d); console.log(r.violations.length);")
+          echo "violations: $VIOLATIONS"
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected 0 violations, got '$VIOLATIONS'"
+            exit 1
+          fi
+          SCORE=$(echo "$OUTPUT" | node -e "const d=require('fs').readFileSync('/dev/stdin','utf8'); const r=JSON.parse(d); console.log(r.score);")
+          echo "score: $SCORE"
+          if [ "$SCORE" != "100" ]; then
+            echo "FAIL: expected score 100, got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: violations=$VIOLATIONS, score=$SCORE"
+
+      - name: Run linter directly and verify markdown report
+        run: |
+          FIXTURE="tests/fixtures/clean.jsonl"
+          REPORT=$(node bin/lint-transcript.mjs "$FIXTURE")
+          echo "Report:"
+          echo "$REPORT"
+          if echo "$REPORT" | grep -q "Agent Discipline Report"; then
+            echo "PASS: report contains expected header"
+          else
+            echo "FAIL: report missing 'Agent Discipline Report' header"
+            exit 1
+          fi
+          if echo "$REPORT" | grep -q "No law violations detected"; then
+            echo "PASS: report confirms no violations"
+          else
+            echo "FAIL: report does not confirm no violations"
+            exit 1
+          fi
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: 'tests/fixtures/clean.jsonl'
+          strict: 'false'
+        continue-on-error: true
+
+      - name: Assert action completed
+        run: |
+          echo "outcome: ${{ steps.action.outcome }}"
+          if [ "${{ steps.action.outcome }}" = "success" ] || [ "${{ steps.action.outcome }}" = "failure" ]; then
+            echo "PASS: action completed with outcome ${{ steps.action.outcome }}"
+          else
+            echo "FAIL: unexpected outcome: ${{ steps.action.outcome }}"
+            exit 1
+          fi

@@ -1,0 +1,5 @@
+{"tool":"Write","tool_input":{"file_path":"src/main.js","content":"// changed without research"},"session_id":"session-2"}
+{"tool":"Edit","tool_input":{"file_path":"src/utils.js","content":"// edited without research"},"session_id":"session-2"}
+{"tool":"Write","tool_input":{"file_path":"src/helper.js","content":"// another write"},"session_id":"session-2"}
+{"tool":"Edit","tool_input":{"file_path":"src/config.js","content":"// config change"},"session_id":"session-2"}
+{"tool":"Write","tool_input":{"file_path":"src/api.js","content":"// api change"},"session_id":"session-2"}

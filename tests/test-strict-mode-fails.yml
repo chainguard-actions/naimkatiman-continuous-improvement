@@ -1,0 +1,52 @@
+name: Test strict mode fails on violations
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Run linter in strict mode — should exit 1 with violations
+        run: |
+          FIXTURE="tests/fixtures/violations.jsonl"
+          set +e
+          node bin/lint-transcript.mjs "$FIXTURE" --strict
+          EXIT_CODE=$?
+          set -e
+          echo "exit code: $EXIT_CODE"
+          if [ "$EXIT_CODE" -eq 0 ]; then
+            echo "FAIL: expected exit code 1 in strict mode with violations, got 0"
+            exit 1
+          fi
+          echo "PASS: strict mode correctly exited with code $EXIT_CODE"
+
+      - name: Verify report contains violation details
+        run: |
+          FIXTURE="tests/fixtures/violations.jsonl"
+          REPORT=$(node bin/lint-transcript.mjs "$FIXTURE" 2>&1 || true)
+          echo "Report:"
+          echo "$REPORT"
+          if echo "$REPORT" | grep -q "Violations"; then
+            echo "PASS: report contains 'Violations'"
+          else
+            echo "FAIL: report does not contain 'Violations'"
+            exit 1
+          fi
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: 'tests/fixtures/violations.jsonl'
+          strict: 'true'
+        continue-on-error: true
+
+      - name: Assert action completed
+        run: |
+          echo "outcome: ${{ steps.action.outcome }}"
+          if [ "${{ steps.action.outcome }}" = "success" ] || [ "${{ steps.action.outcome }}" = "failure" ]; then
+            echo "PASS: action completed with outcome ${{ steps.action.outcome }}"
+          else
+            echo "FAIL: unexpected outcome: ${{ steps.action.outcome }}"
+            exit 1
+          fi

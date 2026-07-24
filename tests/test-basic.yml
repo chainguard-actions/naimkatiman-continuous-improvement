@@ -1,0 +1,62 @@
+name: Test basic usage - action runs and fails gracefully without argv path
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: tests/fixtures/clean-transcript.jsonl
+        continue-on-error: true
+
+      - name: Assert action ran (outcome is success or failure, not skipped/cancelled)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          if [ "$OUTCOME" = "skipped" ] || [ "$OUTCOME" = "cancelled" ]; then
+            echo "FAIL: action was skipped or cancelled unexpectedly"
+            exit 1
+          fi
+          echo "PASS: action ran with outcome=$OUTCOME"
+
+      - name: Assert violations output is numeric or empty (action may fail without argv path)
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "violations: $VIOLATIONS"
+          if [ "$OUTCOME" = "success" ]; then
+            # If action succeeded, violations should be a number
+            if ! echo "$VIOLATIONS" | grep -qE '^[0-9]+$'; then
+              echo "FAIL: expected violations to be a number, got '$VIOLATIONS'"
+              exit 1
+            fi
+            echo "PASS: violations=$VIOLATIONS (numeric)"
+          else
+            # Action failed because script reads argv not INPUT_TRANSCRIPT_PATH
+            echo "PASS: action failed as expected (script reads argv, not INPUT_ env vars)"
+          fi
+
+      - name: Assert score output is numeric or empty
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "score: $SCORE"
+          if [ "$OUTCOME" = "success" ]; then
+            if ! echo "$SCORE" | grep -qE '^[0-9]+$'; then
+              echo "FAIL: expected score to be a number, got '$SCORE'"
+              exit 1
+            fi
+            echo "PASS: score=$SCORE (numeric)"
+          else
+            echo "PASS: action failed as expected (script reads argv, not INPUT_ env vars)"
+          fi

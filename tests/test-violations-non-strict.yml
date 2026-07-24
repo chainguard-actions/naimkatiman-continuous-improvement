@@ -1,0 +1,50 @@
+name: Test violations detected in non-strict mode
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Run linter directly and verify violations are detected
+        run: |
+          FIXTURE="tests/fixtures/violations.jsonl"
+          OUTPUT=$(node bin/lint-transcript.mjs "$FIXTURE" --json)
+          echo "Output: $OUTPUT"
+          VIOLATIONS=$(echo "$OUTPUT" | node -e "const d=require('fs').readFileSync('/dev/stdin','utf8'); const r=JSON.parse(d); console.log(r.violations.length);")
+          echo "violations: $VIOLATIONS"
+          if [ "$VIOLATIONS" -le 0 ] 2>/dev/null; then
+            echo "FAIL: expected violations > 0, got '$VIOLATIONS'"
+            exit 1
+          fi
+          SCORE=$(echo "$OUTPUT" | node -e "const d=require('fs').readFileSync('/dev/stdin','utf8'); const r=JSON.parse(d); console.log(r.score);")
+          echo "score: $SCORE"
+          if [ "$SCORE" -ge 100 ] 2>/dev/null; then
+            echo "FAIL: expected score < 100 for violating transcript, got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: violations=$VIOLATIONS, score=$SCORE"
+
+      - name: Run linter in non-strict mode — should exit 0 even with violations
+        run: |
+          FIXTURE="tests/fixtures/violations.jsonl"
+          node bin/lint-transcript.mjs "$FIXTURE"
+          echo "PASS: non-strict mode exited 0 despite violations"
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: 'tests/fixtures/violations.jsonl'
+          strict: 'false'
+        continue-on-error: true
+
+      - name: Assert action completed
+        run: |
+          echo "outcome: ${{ steps.action.outcome }}"
+          if [ "${{ steps.action.outcome }}" = "success" ] || [ "${{ steps.action.outcome }}" = "failure" ]; then
+            echo "PASS: action completed with outcome ${{ steps.action.outcome }}"
+          else
+            echo "FAIL: unexpected outcome: ${{ steps.action.outcome }}"
+            exit 1
+          fi

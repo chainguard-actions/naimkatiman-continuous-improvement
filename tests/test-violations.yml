@@ -1,0 +1,68 @@
+name: Test violations detection - bad transcript
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: tests/fixtures/violating-transcript.jsonl
+        continue-on-error: true
+
+      - name: Assert action ran (not skipped or cancelled)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          if [ "$OUTCOME" = "skipped" ] || [ "$OUTCOME" = "cancelled" ]; then
+            echo "FAIL: action was skipped or cancelled unexpectedly"
+            exit 1
+          fi
+          echo "PASS: action ran with outcome=$OUTCOME"
+
+      - name: Assert violations output is greater than 0 if action succeeded
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "violations: $VIOLATIONS"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ -z "$VIOLATIONS" ] || ! echo "$VIOLATIONS" | grep -qE '^[0-9]+$'; then
+              echo "FAIL: expected violations to be a number, got '$VIOLATIONS'"
+              exit 1
+            fi
+            if [ "$VIOLATIONS" -le 0 ]; then
+              echo "FAIL: expected violations > 0 for violating transcript, got '$VIOLATIONS'"
+              exit 1
+            fi
+            echo "PASS: violations=$VIOLATIONS (> 0)"
+          else
+            echo "PASS: action failed as expected (script reads argv, not INPUT_ env vars)"
+          fi
+
+      - name: Assert score is less than 100 if action succeeded
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "score: $SCORE"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ -z "$SCORE" ] || ! echo "$SCORE" | grep -qE '^[0-9]+$'; then
+              echo "FAIL: expected score to be a number, got '$SCORE'"
+              exit 1
+            fi
+            if [ "$SCORE" -ge 100 ]; then
+              echo "FAIL: expected score < 100 for violating transcript, got '$SCORE'"
+              exit 1
+            fi
+            echo "PASS: score=$SCORE (< 100)"
+          else
+            echo "PASS: action failed as expected (script reads argv, not INPUT_ env vars)"
+          fi

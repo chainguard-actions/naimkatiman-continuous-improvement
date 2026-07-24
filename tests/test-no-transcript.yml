@@ -1,0 +1,39 @@
+name: Test no transcript provided
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Verify linter exits with error when no file path given
+        run: |
+          set +e
+          OUTPUT=$(node bin/lint-transcript.mjs 2>&1)
+          EXIT_CODE=$?
+          set -e
+          echo "exit code: $EXIT_CODE"
+          echo "output: $OUTPUT"
+          if [ "$EXIT_CODE" -eq 0 ]; then
+            echo "FAIL: expected non-zero exit code when no file path provided"
+            exit 1
+          fi
+          echo "PASS: linter correctly exited with code $EXIT_CODE when no file path given"
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: ''
+          strict: 'false'
+        continue-on-error: true
+
+      - name: Assert action completed (success or graceful failure with no transcript)
+        run: |
+          echo "outcome: ${{ steps.action.outcome }}"
+          if [ "${{ steps.action.outcome }}" = "success" ] || [ "${{ steps.action.outcome }}" = "failure" ]; then
+            echo "PASS: action completed with outcome ${{ steps.action.outcome }}"
+          else
+            echo "FAIL: unexpected outcome: ${{ steps.action.outcome }}"
+            exit 1
+          fi

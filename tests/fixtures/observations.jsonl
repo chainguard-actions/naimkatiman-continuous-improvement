@@ -1,0 +1,4 @@
+{"tool":"Read","tool_input":{"file_path":"src/index.js"},"session_id":"obs-session-1"}
+{"tool":"Grep","tool_input":{"pattern":"export","path":"src/"},"session_id":"obs-session-1"}
+{"tool":"Write","tool_input":{"file_path":"src/index.js","content":"// updated export"},"session_id":"obs-session-1"}
+{"tool":"Bash","tool_input":{"command":"npm run build"},"session_id":"obs-session-1"}
