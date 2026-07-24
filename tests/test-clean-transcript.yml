@@ -1,0 +1,113 @@
+name: Test clean transcript - no violations
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Verify the fixture files exist
+      - name: Verify fixtures exist
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl"
+          if [ ! -f "$SCRIPT" ]; then
+            echo "FAIL: script fixture not found at $SCRIPT"
+            exit 1
+          fi
+          if [ ! -f "$FIXTURE" ]; then
+            echo "FAIL: transcript fixture not found at $FIXTURE"
+            exit 1
+          fi
+          echo "Fixture contents:"
+          cat "$FIXTURE"
+          echo "PASS: fixtures found"
+
+      # Run the linter script and verify 0 violations
+      - name: Run linter on clean transcript - check violations count
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" --json 2>&1)
+          echo "json output: $OUTPUT"
+          VIOLATIONS=$(echo "$OUTPUT" | node -e "
+            const chunks = [];
+            process.stdin.on('data', d => chunks.push(d));
+            process.stdin.on('end', () => {
+              const d = JSON.parse(chunks.join(''));
+              process.stdout.write(String(d.violations.length));
+            });
+          ")
+          echo "violations: $VIOLATIONS"
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected 0 violations, got $VIOLATIONS"
+            exit 1
+          fi
+          echo "PASS: 0 violations for clean transcript"
+
+      # Run the linter script and verify score is 100
+      - name: Run linter on clean transcript - check score
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" --json 2>&1)
+          SCORE=$(echo "$OUTPUT" | node -e "
+            const chunks = [];
+            process.stdin.on('data', d => chunks.push(d));
+            process.stdin.on('end', () => {
+              const d = JSON.parse(chunks.join(''));
+              process.stdout.write(String(d.score));
+            });
+          ")
+          echo "score: $SCORE"
+          if [ "$SCORE" != "100" ]; then
+            echo "FAIL: expected score 100, got $SCORE"
+            exit 1
+          fi
+          echo "PASS: score is 100 for clean transcript"
+
+      # Verify the markdown report format
+      - name: Verify markdown report format
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" 2>&1)
+          echo "report:"
+          echo "$OUTPUT"
+          if ! echo "$OUTPUT" | grep -q "Agent Discipline Report"; then
+            echo "FAIL: expected 'Agent Discipline Report' in report"
+            exit 1
+          fi
+          if ! echo "$OUTPUT" | grep -q "Score:"; then
+            echo "FAIL: expected 'Score:' in report"
+            exit 1
+          fi
+          if ! echo "$OUTPUT" | grep -q "Events analyzed:"; then
+            echo "FAIL: expected 'Events analyzed:' in report"
+            exit 1
+          fi
+          if ! echo "$OUTPUT" | grep -q "No law violations detected"; then
+            echo "FAIL: expected 'No law violations detected' in report"
+            exit 1
+          fi
+          echo "PASS: report format is correct"
+
+      # Test the action via uses: . with transcript-path input
+      - id: action
+        uses: .
+        with:
+          transcript-path: tests/fixtures/clean-transcript.jsonl
+        continue-on-error: true
+
+      - name: Assert action ran
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          if [ "$OUTCOME" = "skipped" ]; then
+            echo "FAIL: action was skipped unexpectedly"
+            exit 1
+          fi
+          echo "PASS: action ran (outcome=$OUTCOME)"

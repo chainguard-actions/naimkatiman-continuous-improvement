@@ -1,0 +1,3 @@
+{"tool":"Write","event":"tool_start","tool_input":{"file_path":"/tmp/src/a.ts"}}
+{"tool":"Write","event":"tool_start","tool_input":{"file_path":"/tmp/src/b.ts"}}
+{"tool":"Edit","event":"tool_start","tool_input":{"file_path":"/tmp/src/c.ts"}}

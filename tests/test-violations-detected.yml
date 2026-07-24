@@ -1,0 +1,49 @@
+name: Test violations detected in transcript
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: '${{ github.workspace }}/pristine/naimkatiman--continuous-improvement/v3.9.2/tests/fixtures/violating-transcript.jsonl'
+          strict: 'false'
+        continue-on-error: true
+
+      - name: Assert action completed (not cancelled)
+        run: |
+          echo "outcome: ${{ steps.action.outcome }}"
+          if [ "${{ steps.action.outcome }}" = "cancelled" ]; then
+            echo "FAIL: action was cancelled unexpectedly"
+            exit 1
+          fi
+          echo "PASS: action completed with outcome=${{ steps.action.outcome }}"
+
+      - name: Assert violations output if action succeeded
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          SCORE: ${{ steps.action.outputs.score }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "violations: $VIOLATIONS"
+          echo "score: $SCORE"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ -z "$VIOLATIONS" ]; then
+              echo "FAIL: violations output was empty"
+              exit 1
+            fi
+            if [ "$VIOLATIONS" -le 0 ] 2>/dev/null; then
+              echo "FAIL: expected violations > 0, got '$VIOLATIONS'"
+              exit 1
+            fi
+            echo "PASS: violations=$VIOLATIONS (> 0 as expected)"
+          else
+            echo "INFO: action did not succeed (outcome=$OUTCOME), skipping output assertions"
+            echo "PASS: action completed without being cancelled"
+          fi

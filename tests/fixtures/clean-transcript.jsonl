@@ -1,0 +1,5 @@
+{"tool":"Grep","event":"tool_start","tool_input":{"pattern":"function main"}}
+{"tool":"Read","event":"tool_start","tool_input":{"file_path":"/tmp/src/main.ts"}}
+{"tool":"Glob","event":"tool_start","tool_input":{"pattern":"**/*.ts"}}
+{"tool":"Edit","event":"tool_start","tool_input":{"file_path":"/tmp/src/main.ts"}}
+{"tool":"Bash","event":"tool_start","tool_input":{"command":"npm test"}}

@@ -1,0 +1,9 @@
+{"tool":"Read","event":"tool_start","tool_input":{"file_path":"/tmp/src/main.ts"}}
+{"tool":"Edit","event":"tool_start","tool_input":{"file_path":"/tmp/src/file1.ts"}}
+{"tool":"Edit","event":"tool_start","tool_input":{"file_path":"/tmp/src/file2.ts"}}
+{"tool":"Edit","event":"tool_start","tool_input":{"file_path":"/tmp/src/file3.ts"}}
+{"tool":"Edit","event":"tool_start","tool_input":{"file_path":"/tmp/src/file4.ts"}}
+{"tool":"Edit","event":"tool_start","tool_input":{"file_path":"/tmp/src/file5.ts"}}
+{"tool":"Edit","event":"tool_start","tool_input":{"file_path":"/tmp/src/file6.ts"}}
+{"tool":"Edit","event":"tool_start","tool_input":{"file_path":"/tmp/src/file7.ts"}}
+{"tool":"Bash","event":"tool_start","tool_input":{"command":"npm test"}}

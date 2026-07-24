@@ -1,0 +1,5 @@
+{"tool":"Write","tool_input":{"file_path":"src/a.js","content":"// a"},"session_id":"sess-002"}
+{"tool":"Write","tool_input":{"file_path":"src/b.js","content":"// b"},"session_id":"sess-002"}
+{"tool":"Write","tool_input":{"file_path":"src/c.js","content":"// c"},"session_id":"sess-002"}
+{"tool":"Edit","tool_input":{"file_path":"src/d.js","content":"// d"},"session_id":"sess-002"}
+{"tool":"Edit","tool_input":{"file_path":"src/e.js","content":"// e"},"session_id":"sess-002"}

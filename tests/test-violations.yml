@@ -1,0 +1,121 @@
+name: Test violations detection
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Verify the fixture files exist
+      - name: Verify fixtures exist
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl"
+          if [ ! -f "$SCRIPT" ]; then
+            echo "FAIL: script fixture not found at $SCRIPT"
+            exit 1
+          fi
+          if [ ! -f "$FIXTURE" ]; then
+            echo "FAIL: violations fixture not found at $FIXTURE"
+            exit 1
+          fi
+          echo "Fixture contents:"
+          cat "$FIXTURE"
+          echo "PASS: fixtures found"
+
+      # Run the linter and verify violations count >= 1
+      - name: Verify violations count is at least 1
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" --json 2>&1)
+          echo "json output: $OUTPUT"
+          VIOLATIONS=$(echo "$OUTPUT" | node -e "
+            const chunks = [];
+            process.stdin.on('data', d => chunks.push(d));
+            process.stdin.on('end', () => {
+              const d = JSON.parse(chunks.join(''));
+              process.stdout.write(String(d.violations.length));
+            });
+          ")
+          echo "violations: $VIOLATIONS"
+          if [ "$VIOLATIONS" -lt "1" ]; then
+            echo "FAIL: expected at least 1 violation, got $VIOLATIONS"
+            exit 1
+          fi
+          echo "PASS: $VIOLATIONS violations detected"
+
+      # Verify score is less than 100 for violations transcript
+      - name: Verify score is less than 100
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" --json 2>&1)
+          SCORE=$(echo "$OUTPUT" | node -e "
+            const chunks = [];
+            process.stdin.on('data', d => chunks.push(d));
+            process.stdin.on('end', () => {
+              const d = JSON.parse(chunks.join(''));
+              process.stdout.write(String(d.score));
+            });
+          ")
+          echo "score: $SCORE"
+          if [ "$SCORE" -ge "100" ]; then
+            echo "FAIL: expected score < 100 for violations transcript, got $SCORE"
+            exit 1
+          fi
+          echo "PASS: score=$SCORE is less than 100"
+
+      # Verify Law 1 (Research Before Executing) is detected in markdown report
+      - name: Verify Law 1 violation detected
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" 2>&1)
+          echo "report output:"
+          echo "$OUTPUT"
+          if ! echo "$OUTPUT" | grep -q "Law 1"; then
+            echo "FAIL: expected Law 1 violation in report"
+            exit 1
+          fi
+          if ! echo "$OUTPUT" | grep -q "Research Before Executing"; then
+            echo "FAIL: expected 'Research Before Executing' in report"
+            exit 1
+          fi
+          echo "PASS: Law 1 violation correctly detected"
+
+      # Verify Law 4 (Verify Before Reporting) is detected in markdown report
+      - name: Verify Law 4 violation detected
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" 2>&1)
+          if ! echo "$OUTPUT" | grep -q "Law 4"; then
+            echo "FAIL: expected Law 4 violation in report"
+            exit 1
+          fi
+          if ! echo "$OUTPUT" | grep -q "Verify Before Reporting"; then
+            echo "FAIL: expected 'Verify Before Reporting' in report"
+            exit 1
+          fi
+          echo "PASS: Law 4 violation correctly detected"
+
+      # Test the action via uses: . with violations transcript
+      - id: action
+        uses: .
+        with:
+          transcript-path: tests/fixtures/violations-transcript.jsonl
+        continue-on-error: true
+
+      - name: Assert action ran
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          if [ "$OUTCOME" = "skipped" ]; then
+            echo "FAIL: action was skipped unexpectedly"
+            exit 1
+          fi
+          echo "PASS: action ran (outcome=$OUTCOME)"

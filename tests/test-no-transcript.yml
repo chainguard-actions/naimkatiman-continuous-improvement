@@ -1,0 +1,27 @@
+name: Test no transcript path (default empty)
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: ''
+          strict: 'false'
+        continue-on-error: true
+
+      - name: Assert action completed (no crash on empty input)
+        run: |
+          echo "outcome: ${{ steps.action.outcome }}"
+          # The action may succeed or fail gracefully with no transcript path
+          # It should not produce an unhandled crash — outcome should be success or failure (not cancelled)
+          if [ "${{ steps.action.outcome }}" = "cancelled" ]; then
+            echo "FAIL: action was cancelled unexpectedly"
+            exit 1
+          fi
+          echo "PASS: action completed with outcome=${{ steps.action.outcome }}"

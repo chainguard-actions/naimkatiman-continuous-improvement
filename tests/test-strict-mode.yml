@@ -1,0 +1,98 @@
+name: Test strict mode
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Verify strict mode exits 1 when violations are present
+      - name: Verify strict mode exits 1 with violations
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl"
+          if [ ! -f "$FIXTURE" ]; then
+            echo "FAIL: fixture not found at $FIXTURE"
+            exit 1
+          fi
+          set +e
+          node "$SCRIPT" "$FIXTURE" --strict
+          EXIT_CODE=$?
+          set -e
+          echo "exit code: $EXIT_CODE"
+          if [ "$EXIT_CODE" != "1" ]; then
+            echo "FAIL: expected exit code 1 with --strict and violations, got $EXIT_CODE"
+            exit 1
+          fi
+          echo "PASS: strict mode exits 1 with violations"
+
+      # Verify strict mode exits 0 when no violations
+      - name: Verify strict mode exits 0 with clean transcript
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl"
+          set +e
+          node "$SCRIPT" "$FIXTURE" --strict
+          EXIT_CODE=$?
+          set -e
+          echo "exit code: $EXIT_CODE"
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "FAIL: expected exit code 0 with --strict and clean transcript, got $EXIT_CODE"
+            exit 1
+          fi
+          echo "PASS: strict mode exits 0 with clean transcript"
+
+      # Verify that --strict does not suppress output
+      - name: Verify strict mode still produces report output
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/violations-transcript.jsonl"
+          set +e
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" --strict 2>&1)
+          set -e
+          echo "output: $OUTPUT"
+          if ! echo "$OUTPUT" | grep -q "Agent Discipline Report"; then
+            echo "FAIL: expected report output even in strict mode"
+            exit 1
+          fi
+          echo "PASS: strict mode still produces report"
+
+      # Test the action via uses: . with strict=true and violations transcript
+      - id: action_strict_violations
+        uses: .
+        with:
+          transcript-path: tests/fixtures/violations-transcript.jsonl
+          strict: 'true'
+        continue-on-error: true
+
+      - name: Assert action ran in strict mode with violations
+        env:
+          OUTCOME: ${{ steps.action_strict_violations.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "skipped" ]; then
+            echo "FAIL: action was skipped unexpectedly"
+            exit 1
+          fi
+          echo "PASS: action ran with outcome=$OUTCOME (strict mode with violations)"
+
+      # Test the action via uses: . with strict=true and clean transcript
+      - id: action_strict_clean
+        uses: .
+        with:
+          transcript-path: tests/fixtures/clean-transcript.jsonl
+          strict: 'true'
+        continue-on-error: true
+
+      - name: Assert action ran in strict mode with clean transcript
+        env:
+          OUTCOME: ${{ steps.action_strict_clean.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "skipped" ]; then
+            echo "FAIL: action was skipped unexpectedly"
+            exit 1
+          fi
+          echo "PASS: action ran with outcome=$OUTCOME (strict mode with clean transcript)"

@@ -1,0 +1,135 @@
+name: Test observations-path input and JSON output
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Verify fixture files exist
+      - name: Verify fixtures exist
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl"
+          if [ ! -f "$SCRIPT" ]; then
+            echo "FAIL: script fixture not found at $SCRIPT"
+            exit 1
+          fi
+          if [ ! -f "$FIXTURE" ]; then
+            echo "FAIL: observations fixture not found at $FIXTURE"
+            exit 1
+          fi
+          echo "Fixture contents:"
+          cat "$FIXTURE"
+          echo "PASS: fixtures found"
+
+      # Test the linter with the observations file - verify JSON output structure
+      - name: Run linter on observations file - verify JSON structure
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" --json 2>&1)
+          echo "json output: $OUTPUT"
+          # Verify it's valid JSON with expected fields
+          echo "$OUTPUT" | node -e "
+            const chunks = [];
+            process.stdin.on('data', d => chunks.push(d));
+            process.stdin.on('end', () => {
+              try {
+                const d = JSON.parse(chunks.join(''));
+                if (!Array.isArray(d.violations)) throw new Error('violations is not an array');
+                if (typeof d.score !== 'number') throw new Error('score is not a number');
+                if (typeof d.stats !== 'object') throw new Error('stats is not an object');
+                console.log('PASS: JSON output has correct structure');
+              } catch(e) {
+                console.error('FAIL: ' + e.message);
+                process.exit(1);
+              }
+            });
+          "
+
+      # Verify violations count is 0 for clean observations
+      - name: Verify 0 violations for clean observations
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" --json 2>&1)
+          VIOLATIONS=$(echo "$OUTPUT" | node -e "
+            const chunks = [];
+            process.stdin.on('data', d => chunks.push(d));
+            process.stdin.on('end', () => {
+              const d = JSON.parse(chunks.join(''));
+              process.stdout.write(String(d.violations.length));
+            });
+          ")
+          echo "violations: $VIOLATIONS"
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected 0 violations for clean observations, got $VIOLATIONS"
+            exit 1
+          fi
+          echo "PASS: 0 violations for clean observations"
+
+      # Verify totalEvents count in stats
+      - name: Verify totalEvents in stats
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl"
+          # Count lines in fixture
+          LINE_COUNT=$(grep -c . "$FIXTURE" || true)
+          echo "fixture line count: $LINE_COUNT"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" --json 2>&1)
+          TOTAL=$(echo "$OUTPUT" | node -e "
+            const chunks = [];
+            process.stdin.on('data', d => chunks.push(d));
+            process.stdin.on('end', () => {
+              const d = JSON.parse(chunks.join(''));
+              process.stdout.write(String(d.stats.totalEvents));
+            });
+          ")
+          echo "total events: $TOTAL"
+          if [ "$TOTAL" != "$LINE_COUNT" ]; then
+            echo "FAIL: expected $LINE_COUNT total events, got $TOTAL"
+            exit 1
+          fi
+          echo "PASS: totalEvents=$TOTAL matches fixture line count"
+
+      # Verify score is 100 for clean observations
+      - name: Verify score is 100 for clean observations
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/clean-transcript.jsonl"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" --json 2>&1)
+          SCORE=$(echo "$OUTPUT" | node -e "
+            const chunks = [];
+            process.stdin.on('data', d => chunks.push(d));
+            process.stdin.on('end', () => {
+              const d = JSON.parse(chunks.join(''));
+              process.stdout.write(String(d.score));
+            });
+          ")
+          echo "score: $SCORE"
+          if [ "$SCORE" != "100" ]; then
+            echo "FAIL: expected score 100 for clean observations, got $SCORE"
+            exit 1
+          fi
+          echo "PASS: score is 100 for clean observations"
+
+      # Test the action via uses: . with observations-path input
+      - id: action
+        uses: .
+        with:
+          observations-path: tests/fixtures/clean-transcript.jsonl
+        continue-on-error: true
+
+      - name: Assert action ran
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          if [ "$OUTCOME" = "skipped" ]; then
+            echo "FAIL: action was skipped unexpectedly"
+            exit 1
+          fi
+          echo "PASS: action ran (outcome=$OUTCOME)"

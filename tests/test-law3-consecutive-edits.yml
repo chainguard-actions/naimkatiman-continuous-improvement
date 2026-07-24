@@ -1,0 +1,114 @@
+name: Test Law 3 - consecutive edits violation
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Verify the fixture files exist
+      - name: Verify fixtures exist
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/consecutive-edits-transcript.jsonl"
+          if [ ! -f "$SCRIPT" ]; then
+            echo "FAIL: script fixture not found at $SCRIPT"
+            exit 1
+          fi
+          if [ ! -f "$FIXTURE" ]; then
+            echo "FAIL: consecutive-edits fixture not found at $FIXTURE"
+            exit 1
+          fi
+          echo "Fixture contents:"
+          cat "$FIXTURE"
+          echo "PASS: fixtures found"
+
+      # Verify Law 3 (One Thing at a Time) is detected for consecutive edits
+      - name: Verify Law 3 violation detected in markdown report
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/consecutive-edits-transcript.jsonl"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" 2>&1)
+          echo "report:"
+          echo "$OUTPUT"
+          if ! echo "$OUTPUT" | grep -q "Law 3"; then
+            echo "FAIL: expected Law 3 violation in report"
+            exit 1
+          fi
+          if ! echo "$OUTPUT" | grep -q "One Thing at a Time"; then
+            echo "FAIL: expected 'One Thing at a Time' in report"
+            exit 1
+          fi
+          echo "PASS: Law 3 violation correctly detected"
+
+      # Verify violations count is at least 1 for consecutive edits transcript
+      - name: Verify violations count for consecutive edits
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/consecutive-edits-transcript.jsonl"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" --json 2>&1)
+          echo "json output: $OUTPUT"
+          VIOLATIONS=$(echo "$OUTPUT" | node -e "
+            const chunks = [];
+            process.stdin.on('data', d => chunks.push(d));
+            process.stdin.on('end', () => {
+              const d = JSON.parse(chunks.join(''));
+              process.stdout.write(String(d.violations.length));
+            });
+          ")
+          echo "violations: $VIOLATIONS"
+          if [ "$VIOLATIONS" -lt "1" ]; then
+            echo "FAIL: expected at least 1 violation for consecutive edits, got $VIOLATIONS"
+            exit 1
+          fi
+          echo "PASS: $VIOLATIONS violations detected for consecutive edits"
+
+      # Verify score is in valid range 0-100 and less than 100
+      - name: Verify score is in valid range for consecutive edits
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/tests/fixtures/lint-transcript.mjs"
+          FIXTURE="$GITHUB_WORKSPACE/tests/fixtures/consecutive-edits-transcript.jsonl"
+          OUTPUT=$(node "$SCRIPT" "$FIXTURE" --json 2>&1)
+          SCORE=$(echo "$OUTPUT" | node -e "
+            const chunks = [];
+            process.stdin.on('data', d => chunks.push(d));
+            process.stdin.on('end', () => {
+              const d = JSON.parse(chunks.join(''));
+              process.stdout.write(String(d.score));
+            });
+          ")
+          echo "score: $SCORE"
+          if [ "$SCORE" -gt "100" ]; then
+            echo "FAIL: score cannot exceed 100, got $SCORE"
+            exit 1
+          fi
+          if [ "$SCORE" -lt "0" ]; then
+            echo "FAIL: score cannot be negative, got $SCORE"
+            exit 1
+          fi
+          # Score should be less than 100 since there are violations
+          if [ "$SCORE" -ge "100" ]; then
+            echo "FAIL: expected score < 100 for transcript with violations, got $SCORE"
+            exit 1
+          fi
+          echo "PASS: score is in valid range 0-100: $SCORE"
+
+      # Test the action via uses: . with consecutive edits transcript
+      - id: action
+        uses: .
+        with:
+          transcript-path: tests/fixtures/consecutive-edits-transcript.jsonl
+        continue-on-error: true
+
+      - name: Assert action ran
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          if [ "$OUTCOME" = "skipped" ]; then
+            echo "FAIL: action was skipped unexpectedly"
+            exit 1
+          fi
+          echo "PASS: action ran (outcome=$OUTCOME)"
