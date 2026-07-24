@@ -8,6 +8,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
+| v3.11.0 | [`v3.11.0`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.11.0) | [`18c3f7b`](https://github.com/naimkatiman/continuous-improvement/commit/18c3f7b6587b5d854620b4c7bcc5b060b17dfa8c) |
 | v3.12.3 | [`v3.12.3`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.12.3) | [`fe9178e`](https://github.com/naimkatiman/continuous-improvement/commit/fe9178ebbbfbe8fbd87dde10d065b32365f40ee7) |
 | v3.15.0 | [`v3.15.0`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.15.0) | [`38f2b01`](https://github.com/naimkatiman/continuous-improvement/commit/38f2b01452f1f872c85dcd0cb63d2978c9a28e7d) |
 | v3.16.0 | [`v3.16.0`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.16.0) | [`3d04964`](https://github.com/naimkatiman/continuous-improvement/commit/3d04964e54e93fa19f4d7e6169be26bbb9761608) |
