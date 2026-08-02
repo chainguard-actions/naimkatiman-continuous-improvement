@@ -1,0 +1,55 @@
+name: Test violations detected in transcript
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create violating transcript fixture
+        run: |
+          cat > /tmp/violating-transcript.jsonl <<'EOF'
+          {"tool":"Write","tool_input":{"file_path":"src/a.ts"},"session_id":"sess1"}
+          {"tool":"Write","tool_input":{"file_path":"src/b.ts"},"session_id":"sess1"}
+          {"tool":"Edit","tool_input":{"file_path":"src/c.ts"},"session_id":"sess1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/violating-transcript.jsonl
+          strict: 'false'
+
+      - name: Assert violations is greater than 0
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if [ -z "$VIOLATIONS" ] || [ "$VIOLATIONS" -le 0 ] 2>/dev/null; then
+            echo "FAIL: expected violations > 0, got '$VIOLATIONS'"
+            exit 1
+          fi
+          echo "PASS: $VIOLATIONS violation(s) detected"
+
+      - name: Assert score is less than 100
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ] || [ "$SCORE" -ge 100 ] 2>/dev/null; then
+            echo "FAIL: expected score < 100, got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: score is $SCORE (below 100)"
+
+      - name: Assert report contains violations section
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if ! echo "$REPORT" | grep -q "Violations"; then
+            echo "FAIL: expected 'Violations' section in report"
+            exit 1
+          fi
+          echo "PASS"

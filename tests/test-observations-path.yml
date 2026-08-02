@@ -1,0 +1,56 @@
+name: Test observations-path input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create observations fixture
+        run: |
+          cat > /tmp/observations.jsonl <<'EOF'
+          {"tool":"Read","tool_input":{"file_path":"package.json"},"session_id":"obs1"}
+          {"tool":"Grep","tool_input":{"pattern":"import"},"session_id":"obs1"}
+          {"tool":"Write","tool_input":{"file_path":"src/index.ts"},"session_id":"obs1"}
+          {"tool":"Bash","tool_input":{"command":"jest --coverage"},"session_id":"obs1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          observations-path: /tmp/observations.jsonl
+          strict: 'false'
+
+      - name: Assert violations output is set
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if [ -z "$VIOLATIONS" ]; then
+            echo "FAIL: expected violations output to be set"
+            exit 1
+          fi
+          echo "PASS: violations=$VIOLATIONS"
+
+      - name: Assert score output is set
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ]; then
+            echo "FAIL: expected score output to be set"
+            exit 1
+          fi
+          echo "PASS: score=$SCORE"
+
+      - name: Assert report contains discipline report header
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if ! echo "$REPORT" | grep -q "Agent Discipline Report"; then
+            echo "FAIL: expected 'Agent Discipline Report' in report"
+            exit 1
+          fi
+          echo "PASS"

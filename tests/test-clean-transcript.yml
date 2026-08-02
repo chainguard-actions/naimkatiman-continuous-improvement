@@ -1,0 +1,57 @@
+name: Test clean transcript (no violations)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create clean transcript fixture
+        run: |
+          cat > /tmp/clean-transcript.jsonl <<'EOF'
+          {"tool":"Read","tool_input":{"file_path":"README.md"},"session_id":"sess1"}
+          {"tool":"Grep","tool_input":{"pattern":"foo"},"session_id":"sess1"}
+          {"tool":"Glob","tool_input":{"pattern":"**/*.ts"},"session_id":"sess1"}
+          {"tool":"Write","tool_input":{"file_path":"src/foo.ts"},"session_id":"sess1"}
+          {"tool":"Bash","tool_input":{"command":"npm run test"},"session_id":"sess1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/clean-transcript.jsonl
+          strict: 'false'
+
+      - name: Assert violations is 0
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected 0 violations, got $VIOLATIONS"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert score is 100
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ "$SCORE" != "100" ]; then
+            echo "FAIL: expected score 100, got $SCORE"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert report contains no violations message
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if ! echo "$REPORT" | grep -q "No law violations detected"; then
+            echo "FAIL: expected 'No law violations detected' in report"
+            exit 1
+          fi
+          echo "PASS"

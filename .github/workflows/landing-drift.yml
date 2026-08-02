@@ -1,0 +1,54 @@
+name: Landing drift check
+
+# Fails when the landing source differs from package.json, or the deployed page
+# is not serving that package version. This catches a release merged to main whose manual
+# Cloudflare Pages deploy was never run. Read-only (curl + version compare): no
+# secret, cannot deploy. See docs/RELEASING.md "Landing page".
+#
+# continuous-improvement.dev sits behind the customer zone's Cloudflare bot
+# protection, which 403s datacenter IPs (GitHub runners) even with a browser UA.
+# So we try the custom domain first, then fall back to the *.pages.dev URL (the
+# Cloudflare-managed zone, no customer bot rules) — both serve the same deployment.
+on:
+  schedule:
+    - cron: '37 7 * * *'   # daily; catches a missed deploy within 24h
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Compare package, landing source, and deployment
+        run: |
+          node bin/check-landing-version.mjs
+
+          ua='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+          rev() { curl -fsSL --retry 3 --retry-delay 5 -A "$ua" "$1" 2>/dev/null \
+            | grep -oE 'REV [0-9]+\.[0-9]+\.[0-9]+' | head -1 | awk '{print $2}'; }
+
+          expected=$(node -p "require('./package.json').version")
+
+          url='https://continuous-improvement.dev/'
+          live=$(rev "$url")
+          if [ -z "$live" ]; then
+            url='https://continuous-improvement.pages.dev/'
+            live=$(rev "$url")
+          fi
+
+          echo "package.json : ${expected:-<none>}"
+          echo "live  $url : ${live:-<none>}"
+
+          if [ -z "$expected" ] || [ -z "$live" ]; then
+            echo "::error::Could not resolve the package or deployed REV version (package='$expected' live='$live'). Both the custom domain and *.pages.dev were unreachable, or the page markup/pattern changed."
+            exit 1
+          fi
+          if [ "$expected" != "$live" ]; then
+            echo "::error::Deployed landing is STALE: serving $live but package.json is $expected. Redeploy: wrangler pages deploy docs/landing --project-name=continuous-improvement --branch=main --commit-dirty=true"
+            exit 1
+          fi
+          echo "OK: package, landing source, and deployment match ($expected)"

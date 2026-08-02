@@ -1,0 +1,53 @@
+name: Test malformed JSONL handling
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create mixed valid/invalid JSONL fixture
+        run: |
+          cat > /tmp/mixed-transcript.jsonl <<'EOF'
+          {"tool":"Read","tool_input":{"file_path":"README.md"},"session_id":"sess1"}
+          this is not valid json
+          {"tool":"Grep","tool_input":{"pattern":"test"},"session_id":"sess1"}
+          {broken json here
+          {"tool":"Write","tool_input":{"file_path":"src/foo.ts"},"session_id":"sess1"}
+          {"tool":"Bash","tool_input":{"command":"npm run build"},"session_id":"sess1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/mixed-transcript.jsonl
+          strict: 'false'
+
+      - name: Assert action succeeded despite parse failures
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          echo "score: $SCORE"
+          if [ -z "$VIOLATIONS" ]; then
+            echo "FAIL: expected violations output to be set even with parse failures"
+            exit 1
+          fi
+          if [ -z "$SCORE" ]; then
+            echo "FAIL: expected score output to be set even with parse failures"
+            exit 1
+          fi
+          echo "PASS: action handled malformed JSONL gracefully"
+
+      - name: Assert report mentions parse failures
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if ! echo "$REPORT" | grep -qi "parse failure"; then
+            echo "FAIL: expected parse failure mention in report"
+            exit 1
+          fi
+          echo "PASS: report mentions parse failures"
