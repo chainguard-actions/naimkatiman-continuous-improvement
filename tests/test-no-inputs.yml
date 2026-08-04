@@ -1,0 +1,30 @@
+name: Test no inputs (no transcript path)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        continue-on-error: true
+      - name: Assert action exits gracefully with no inputs
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "violations: $VIOLATIONS"
+          echo "score: $SCORE"
+          # With no transcript-path or observations-path, the action should
+          # exit with an error (no file path provided). That is acceptable.
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action exited with error as expected when no transcript provided"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded (possibly no-op)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

@@ -1,0 +1,58 @@
+name: Test violations transcript (non-strict mode)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          transcript-path: tests/fixtures/violations-transcript.jsonl
+          strict: 'false'
+      - name: Assert violations are detected
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+          SCORE: ${{ steps.action.outputs.score }}
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          echo "score: $SCORE"
+          if [ -z "$VIOLATIONS" ]; then
+            echo "FAIL: violations output is empty"
+            exit 1
+          fi
+          if [ "$VIOLATIONS" -le 0 ] 2>/dev/null; then
+            echo "FAIL: expected violations > 0, got '$VIOLATIONS'"
+            exit 1
+          fi
+          echo "PASS: violations=$VIOLATIONS (violations detected as expected)"
+      - name: Assert score is below 100
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ]; then
+            echo "FAIL: score output is empty"
+            exit 1
+          fi
+          if [ "$SCORE" -ge 100 ] 2>/dev/null; then
+            echo "FAIL: expected score < 100 for a transcript with violations, got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: score=$SCORE (below 100 as expected)"
+      - name: Assert report mentions violations
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if [ -z "$REPORT" ]; then
+            echo "FAIL: report output is empty"
+            exit 1
+          fi
+          if ! echo "$REPORT" | grep -qi "violation"; then
+            echo "FAIL: report does not mention violations"
+            exit 1
+          fi
+          echo "PASS: report mentions violations"
