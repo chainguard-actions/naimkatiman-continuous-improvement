@@ -1,0 +1,80 @@
+name: Test report content and format
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create mixed transcript fixture
+        run: |
+          # A transcript with research, writes, and verification
+          cat > /tmp/mixed-transcript.jsonl << 'EOF'
+          {"tool":"Glob","tool_input":{"pattern":"**/*.ts"},"session_id":"s1"}
+          {"tool":"Read","tool_input":{"file_path":"package.json"},"session_id":"s1"}
+          {"tool":"Write","tool_input":{"file_path":"src/feature.ts"},"session_id":"s1"}
+          {"tool":"Bash","tool_input":{"command":"npm run build"},"session_id":"s1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          transcript-path: /tmp/mixed-transcript.jsonl
+
+      - name: Assert report contains score header
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if ! echo "$REPORT" | grep -q "Agent Discipline Report"; then
+            echo "FAIL: report missing 'Agent Discipline Report' header"
+            exit 1
+          fi
+          echo "PASS: report has expected header"
+
+      - name: Assert report contains score line
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          if ! echo "$REPORT" | grep -q "Score:"; then
+            echo "FAIL: report missing 'Score:' line"
+            exit 1
+          fi
+          echo "PASS: report has Score line"
+
+      - name: Assert report contains events analyzed
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          if ! echo "$REPORT" | grep -q "Events analyzed:"; then
+            echo "FAIL: report missing 'Events analyzed:' line"
+            exit 1
+          fi
+          echo "PASS: report has Events analyzed line"
+
+      - name: Assert score is numeric and in range
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if ! echo "$SCORE" | grep -qE '^[0-9]+$'; then
+            echo "FAIL: score '$SCORE' is not a non-negative integer"
+            exit 1
+          fi
+          if [ "$SCORE" -gt 100 ]; then
+            echo "FAIL: score '$SCORE' exceeds 100"
+            exit 1
+          fi
+          echo "PASS: score $SCORE is in valid range 0-100"
+
+      - name: Assert violations is numeric
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if ! echo "$VIOLATIONS" | grep -qE '^[0-9]+$'; then
+            echo "FAIL: violations '$VIOLATIONS' is not a non-negative integer"
+            exit 1
+          fi
+          echo "PASS: violations output is numeric: $VIOLATIONS"
