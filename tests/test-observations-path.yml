@@ -1,0 +1,62 @@
+name: Test observations-path input
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create observations fixture
+        run: |
+          # A well-disciplined session: research → write → verify
+          cat > /tmp/observations.jsonl <<'EOF'
+          {"tool":"Grep","tool_input":{"pattern":"TODO","path":"src/"},"session_id":"obs1"}
+          {"tool":"Read","tool_input":{"file_path":"src/index.js"},"session_id":"obs1"}
+          {"tool":"Write","tool_input":{"file_path":"src/index.js","content":"// fixed"},"session_id":"obs1"}
+          {"tool":"Bash","tool_input":{"command":"jest --coverage"},"session_id":"obs1"}
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          observations-path: /tmp/observations.jsonl
+          strict: 'false'
+
+      - name: Assert violations output is set
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if [ -z "$VIOLATIONS" ]; then
+            echo "FAIL: violations output is empty — observations-path may not have been read"
+            exit 1
+          fi
+          echo "PASS: violations output is '$VIOLATIONS'"
+
+      - name: Assert score output is set
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ]; then
+            echo "FAIL: score output is empty"
+            exit 1
+          fi
+          echo "PASS: score is '$SCORE'"
+
+      - name: Assert report contains discipline report header
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if [ -z "$REPORT" ]; then
+            echo "FAIL: report is empty"
+            exit 1
+          fi
+          if ! echo "$REPORT" | grep -q "Agent Discipline Report"; then
+            echo "FAIL: report does not contain expected header 'Agent Discipline Report'"
+            exit 1
+          fi
+          echo "PASS"

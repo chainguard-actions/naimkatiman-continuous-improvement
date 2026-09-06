@@ -1,0 +1,9 @@
+{
+  "status": "self_contained",
+  "entries": [
+    {
+      "path": "bin/lint-transcript.mjs",
+      "status": "self_contained"
+    }
+  ]
+}
