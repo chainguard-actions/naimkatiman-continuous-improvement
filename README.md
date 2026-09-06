@@ -21,6 +21,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | v3.22.0 | [`v3.22.0`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.22.0) | [`ec23aad`](https://github.com/naimkatiman/continuous-improvement/commit/ec23aad2e4134c10a3a1b960d87aa43ee0cac736) |
 | v3.22.1 | [`v3.22.1`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.22.1) | [`188d1e4`](https://github.com/naimkatiman/continuous-improvement/commit/188d1e42666bf821d2d51f11a628f708a0ff9703) |
 | v3.23.0 | [`v3.23.0`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.23.0) | [`564115f`](https://github.com/naimkatiman/continuous-improvement/commit/564115fc340398d66ad003ec99b6082cf399c6c8) |
+| v3.24.0 | [`v3.24.0`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.24.0) | [`ac77c70`](https://github.com/naimkatiman/continuous-improvement/commit/ac77c7076e3ff25f1faef1734ba5fac39a839745) |
 | v3.9.1 | [`v3.9.1`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.9.1) | [`f1bdfed`](https://github.com/naimkatiman/continuous-improvement/commit/f1bdfedef605e673c103cfaf3bde9014ce4bd757) |
 | v3.9.2 | [`v3.9.2`](https://github.com/chainguard-actions/naimkatiman-continuous-improvement/tree/v3.9.2) | [`2800738`](https://github.com/naimkatiman/continuous-improvement/commit/2800738b9688f800c234e91c9ca88584457d2743) |
 
