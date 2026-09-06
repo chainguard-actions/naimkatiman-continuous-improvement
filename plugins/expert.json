@@ -1,0 +1,120 @@
+{
+  "name": "continuous-improvement",
+  "version": "3.24.0",
+  "mode": "expert",
+  "description": "Expert mode: tune confidence, manage instincts, and persist plans on disk. Adds safety, token-budget, and strategic-compact skills plus the /learn-eval command so long sessions stay sharp and learnings survive context resets.",
+  "tools": [
+    {
+      "name": "ci_status",
+      "what": "See what the system has learned about your project"
+    },
+    {
+      "name": "ci_instincts",
+      "what": "List all learned behaviors with confidence levels"
+    },
+    {
+      "name": "ci_reflect",
+      "what": "Reflect on what you did this session"
+    },
+    {
+      "name": "ci_gateguard_clear",
+      "what": "Clear the GateGuard gate for files after presenting facts"
+    },
+    {
+      "name": "ci_reinforce",
+      "what": "Accept or reject instinct suggestions to tune confidence"
+    },
+    {
+      "name": "ci_create_instinct",
+      "what": "Manually create instincts with custom triggers and confidence"
+    },
+    {
+      "name": "ci_observations",
+      "what": "View raw tool call observations captured by hooks"
+    },
+    {
+      "name": "ci_export",
+      "what": "Export instincts as JSON for sharing or backup"
+    },
+    {
+      "name": "ci_import",
+      "what": "Import instincts from JSON (skip duplicates)"
+    },
+    {
+      "name": "ci_plan_init",
+      "what": "Create project-root planning files for persistent task memory"
+    },
+    {
+      "name": "ci_plan_status",
+      "what": "Summarize task_plan.md, findings.md, and progress.md status"
+    },
+    {
+      "name": "ci_dashboard",
+      "what": "Visual dashboard showing instinct health, confidence distribution, and learning progress"
+    },
+    {
+      "name": "ci_load_pack",
+      "what": "Load starter instinct packs (react, python, go) into the current project"
+    },
+    {
+      "name": "ci_goal_check",
+      "what": "Detect when a session has drifted from its stated goal"
+    },
+    {
+      "name": "ci_recall",
+      "what": "Search past sessions for relevant prior activity (episodic recall)"
+    },
+    {
+      "name": "ci_distill_candidates",
+      "what": "Find repeated successful tool sequences worth turning into skills"
+    },
+    {
+      "name": "ci_distill_propose",
+      "what": "Draft a reusable instinct from a repeated successful pattern"
+    },
+    {
+      "name": "ci_distill_promote",
+      "what": "Promote an edited draft into a live instinct"
+    },
+    {
+      "name": "ci_distill_from_workflow",
+      "what": "Draft a reusable instinct from a verified Workflow run"
+    }
+  ],
+  "setup": {
+    "claude_desktop": {
+      "mcpServers": {
+        "continuous-improvement": {
+          "command": "node",
+          "args": [
+            "<install-path>/bin/mcp-server.mjs",
+            "--mode",
+            "expert"
+          ]
+        }
+      }
+    },
+    "claude_code": {
+      "mcpServers": {
+        "continuous-improvement": {
+          "command": "node",
+          "args": [
+            "<install-path>/bin/mcp-server.mjs",
+            "--mode",
+            "expert"
+          ]
+        }
+      }
+    }
+  },
+  "hooks": {
+    "included": [
+      "PreToolUse",
+      "PostToolUse",
+      "UserPromptSubmit",
+      "SessionStart",
+      "SessionEnd"
+    ],
+    "description": "Full hook suite: observation capture, lazy prompt routing, session-level instinct loading, and auto-reflection."
+  }
+}

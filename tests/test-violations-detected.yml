@@ -1,0 +1,69 @@
+name: Test violations detected in transcript
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a bad transcript (writes without research, no verification)
+        run: |
+          cat > /tmp/bad-transcript.jsonl <<'EOF'
+          {"tool":"Write","tool_input":{"file_path":"src/foo.js","content":"// changed"},"session_id":"sess-1"}
+          {"tool":"Write","tool_input":{"file_path":"src/bar.js","content":"// changed"},"session_id":"sess-1"}
+          {"tool":"Edit","tool_input":{"file_path":"src/baz.js","content":"// changed"},"session_id":"sess-1"}
+          EOF
+
+      - name: Run action with bad transcript (non-strict mode)
+        id: action
+        uses: .
+        with:
+          transcript-path: /tmp/bad-transcript.jsonl
+          strict: 'false'
+
+      - name: Assert violations output is greater than zero
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if [ -z "$VIOLATIONS" ]; then
+            echo "FAIL: violations output is empty"
+            exit 1
+          fi
+          if [ "$VIOLATIONS" -le 0 ] 2>/dev/null; then
+            echo "FAIL: expected violations > 0, got '$VIOLATIONS'"
+            exit 1
+          fi
+          echo "PASS: violations detected: $VIOLATIONS"
+
+      - name: Assert score is less than 100
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ]; then
+            echo "FAIL: score output is empty"
+            exit 1
+          fi
+          if [ "$SCORE" -ge 100 ] 2>/dev/null; then
+            echo "FAIL: expected score < 100 for a bad transcript, got '$SCORE'"
+            exit 1
+          fi
+          echo "PASS: score is $SCORE (below 100 as expected)"
+
+      - name: Assert report mentions violations
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if [ -z "$REPORT" ]; then
+            echo "FAIL: report output is empty"
+            exit 1
+          fi
+          if ! echo "$REPORT" | grep -qi "violation"; then
+            echo "FAIL: report does not mention violations"
+            exit 1
+          fi
+          echo "PASS: report mentions violations"

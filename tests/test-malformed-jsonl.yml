@@ -1,0 +1,62 @@
+name: Test malformed JSONL lines are handled gracefully
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a transcript with some malformed lines mixed in
+        run: |
+          cat > /tmp/mixed-transcript.jsonl <<'EOF'
+          {"tool":"Read","tool_input":{"file_path":"src/index.js"},"session_id":"sess-1"}
+          this is not valid json at all
+          {"tool":"Write","tool_input":{"file_path":"src/index.js","content":"// updated"},"session_id":"sess-1"}
+          {broken json here
+          {"tool":"Bash","tool_input":{"command":"npm run test"},"session_id":"sess-1"}
+          EOF
+
+      - name: Run action with mixed valid/invalid JSONL
+        id: action
+        uses: .
+        with:
+          transcript-path: /tmp/mixed-transcript.jsonl
+
+      - name: Assert action succeeded despite parse failures
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: expected action to succeed despite malformed lines, got '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS: action handled malformed lines gracefully"
+
+      - name: Assert violations output is set
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if [ -z "$VIOLATIONS" ]; then
+            echo "FAIL: violations output is empty"
+            exit 1
+          fi
+          echo "PASS: violations output is '$VIOLATIONS'"
+
+      - name: Assert report mentions parse failures
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if [ -z "$REPORT" ]; then
+            echo "FAIL: report output is empty"
+            exit 1
+          fi
+          if ! echo "$REPORT" | grep -qi "parse failure"; then
+            echo "FAIL: report does not mention parse failures"
+            exit 1
+          fi
+          echo "PASS: report mentions parse failures"

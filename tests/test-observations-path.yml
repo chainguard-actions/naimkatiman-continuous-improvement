@@ -1,0 +1,61 @@
+name: Test observations-path input
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create an observations file with good discipline
+        run: |
+          cat > /tmp/observations.jsonl <<'EOF'
+          {"tool":"Read","tool_input":{"file_path":"src/index.js"},"session_id":"sess-obs-1"}
+          {"tool":"Grep","tool_input":{"pattern":"TODO","path":"src/"},"session_id":"sess-obs-1"}
+          {"tool":"Write","tool_input":{"file_path":"src/index.js","content":"// fixed"},"session_id":"sess-obs-1"}
+          {"tool":"Bash","tool_input":{"command":"jest --coverage"},"session_id":"sess-obs-1"}
+          EOF
+
+      - name: Run action using observations-path input
+        id: action
+        uses: .
+        with:
+          observations-path: /tmp/observations.jsonl
+
+      - name: Assert violations output is zero
+        env:
+          VIOLATIONS: ${{ steps.action.outputs.violations }}
+        run: |
+          echo "violations: $VIOLATIONS"
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "FAIL: expected 0 violations, got '$VIOLATIONS'"
+            exit 1
+          fi
+          echo "PASS: 0 violations as expected"
+
+      - name: Assert score output is set
+        env:
+          SCORE: ${{ steps.action.outputs.score }}
+        run: |
+          echo "score: $SCORE"
+          if [ -z "$SCORE" ]; then
+            echo "FAIL: score output is empty"
+            exit 1
+          fi
+          echo "PASS: score is '$SCORE'"
+
+      - name: Assert report contains discipline summary
+        env:
+          REPORT: ${{ steps.action.outputs.report }}
+        run: |
+          echo "report: $REPORT"
+          if [ -z "$REPORT" ]; then
+            echo "FAIL: report output is empty"
+            exit 1
+          fi
+          if ! echo "$REPORT" | grep -q "Agent Discipline Report"; then
+            echo "FAIL: report does not contain expected header 'Agent Discipline Report'"
+            exit 1
+          fi
+          echo "PASS: report contains expected header"
